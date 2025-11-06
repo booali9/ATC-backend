@@ -1,27 +1,20 @@
+// utils/multerCloudinary.js
 const multer = require('multer');
-const path = require('path');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const cloudinary = require('../config/cloudinary'); // your cloudinary config
 
-// Configure multer for file upload
-const storage = multer.diskStorage({
-  filename: function (req, file, cb) {
-    cb(null, `${Date.now()}-${file.originalname}`);
-  }
-});
-
-const fileFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith('image/')) {
-    cb(null, true);
-  } else {
-    cb(new Error('Only image files are allowed!'), false);
-  }
-};
+// Configure Cloudinary storage
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'messages', // folder in Cloudinary
+    allowed_formats: ['jpg', 'png', 'jpeg', 'gif', 'mp3', 'wav', 'ogg'],
+  },
+});  
 
 const upload = multer({
-  storage: storage,
-  fileFilter: fileFilter,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
-  }
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 });
 
 module.exports = upload;

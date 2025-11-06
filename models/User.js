@@ -35,13 +35,13 @@ const userSchema = new mongoose.Schema({
   }],
   serviceSeeking: {
     type: String,
-    enum: ['web-development', 'mobile-development', 'graphic-design', 'digital-marketing', 'content-writing', 'other'],
-   
+    trim: true
   },
   isVerified: {
     type: Boolean,
     default: false
   },
+   friends: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // Frie
   otp: {
     code: String,
     expiresAt: Date
