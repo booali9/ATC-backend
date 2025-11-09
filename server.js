@@ -33,6 +33,8 @@ app.get('/', (req, res) => {
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/user', require('./routes/userRoute'));
 app.use('/api/chat', require('./routes/chatRoutes'));
+app.use('/api/subscription', require('./routes/subscription'));
+app.use('/webhook', require('./routes/webhook'))
 
 // Socket.IO
 io.on('connection', (socket) => {

@@ -41,7 +41,30 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-   friends: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // Frie
+  friends: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  
+  // Subscription fields
+  subscription: {
+    plan: {
+      type: String,
+      enum: ['basic', 'standard', 'premium', null],
+      default: null
+    },
+    stripeCustomerId: String,
+    stripeSubscriptionId: String,
+    status: {
+      type: String,
+      enum: ['active', 'canceled', 'past_due', 'unpaid', 'incomplete', null],
+      default: null
+    },
+    currentPeriodEnd: Date
+  },
+  
+  credits: {
+    type: Number,
+    default: 0
+  },
+  
   otp: {
     code: String,
     expiresAt: Date
