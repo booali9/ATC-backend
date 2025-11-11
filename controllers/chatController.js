@@ -1,13 +1,28 @@
 const Chat = require('../models/Chat');
 const User = require('../models/User');
+const Barter = require('../models/Barter');
 const cloudinary = require('../middleware/upload');
 
 // Send text message
 exports.sendTextMessage = async (req, res) => {
   try {
     const { chatId, content } = req.body;
-    const chat = await Chat.findById(chatId);
+    const chat = await Chat.findById(chatId).populate('participants');
     if (!chat) return res.status(404).json({ message: 'Chat not found' });
+
+    // Check if barter is still active
+    const otherUserId = chat.participants.find(p => p._id.toString() !== req.user._id.toString())._id;
+    const activeBarter = await Barter.findOne({
+      $or: [
+        { requester: req.user._id, accepter: otherUserId },
+        { requester: otherUserId, accepter: req.user._id }
+      ],
+      status: 'accepted'
+    });
+
+    if (!activeBarter) {
+      return res.status(403).json({ success: false, message: 'Messaging only allowed during active barters' });
+    }
 
     const message = {
       sender: req.user._id,
@@ -33,8 +48,22 @@ exports.sendTextMessage = async (req, res) => {
 exports.sendMediaMessage = async (req, res) => {
   try {
     const { chatId } = req.body;
-    const chat = await Chat.findById(chatId);
+    const chat = await Chat.findById(chatId).populate('participants');
     if (!chat) return res.status(404).json({ message: 'Chat not found' });
+
+    // Check if barter is still active
+    const otherUserId = chat.participants.find(p => p._id.toString() !== req.user._id.toString())._id;
+    const activeBarter = await Barter.findOne({
+      $or: [
+        { requester: req.user._id, accepter: otherUserId },
+        { requester: otherUserId, accepter: req.user._id }
+      ],
+      status: 'accepted'
+    });
+
+    if (!activeBarter) {
+      return res.status(403).json({ success: false, message: 'Messaging only allowed during active barters' });
+    }
 
     const result = await cloudinary.uploader.upload(req.file.path, {
       folder: 'chat-media'
@@ -92,11 +121,32 @@ exports.getChatMessages = async (req, res) => {
   }
 };
 
-// Get all chats for user
+// Get all chats for user (only active barters)
 exports.getUserChats = async (req, res) => {
   try {
     const userId = req.user._id;
-    let chats = await Chat.find({ participants: userId })
+
+    // Get all active barters for this user
+    const activeBarters = await Barter.find({
+      $or: [
+        { requester: userId },
+        { accepter: userId }
+      ],
+      status: 'accepted'
+    });
+
+    if (activeBarters.length === 0) {
+      return res.json({ success: true, chats: [] });
+    }
+
+    // Get other user IDs from active barters
+    const otherUserIds = activeBarters.map(barter =>
+      barter.requester.toString() === userId.toString() ? barter.accepter : barter.requester
+    );
+
+    let chats = await Chat.find({
+      participants: { $all: [userId], $in: otherUserIds }
+    })
       .populate('participants', 'name profileImage')
       .populate('messages.sender', 'name profileImage')
       .sort({ updatedAt: -1 });
@@ -121,7 +171,7 @@ exports.getUserChats = async (req, res) => {
   }
 };
 
-// Get or create chat with another user
+// Get or create chat with another user (only if active barter exists)
 exports.getOrCreateChat = async (req, res) => {
   try {
     const { otherUserId } = req.body;
@@ -129,6 +179,19 @@ exports.getOrCreateChat = async (req, res) => {
 
     const otherUser = await User.findById(otherUserId);
     if (!otherUser) return res.status(404).json({ message: 'User not found' });
+
+    // Check if there's an active barter between these users
+    const activeBarter = await Barter.findOne({
+      $or: [
+        { requester: currentUserId, accepter: otherUserId },
+        { requester: otherUserId, accepter: currentUserId }
+      ],
+      status: 'accepted'
+    });
+
+    if (!activeBarter) {
+      return res.status(403).json({ success: false, message: 'Messaging only allowed between users with active barters' });
+    }
 
     let chat = await Chat.findOne({
       participants: { $all: [currentUserId, otherUserId] }

@@ -29,14 +29,14 @@ const userSchema = new mongoose.Schema({
     public_id: String,
     url: String
   },
-  skills: [{
+  skills_offered: [{
     type: String,
     trim: true
   }],
-  serviceSeeking: {
+  skills_wanted: [{
     type: String,
     trim: true
-  },
+  }],
   isVerified: {
     type: Boolean,
     default: false

@@ -36,8 +36,8 @@ exports.editProfile = async (req, res) => {
     const updates = {};
     if (name) updates.name = name;
     if (phone) updates.phone = phone;
-    if (skills) updates.skills = skills;
-    if (serviceSeeking) updates.serviceSeeking = serviceSeeking;
+    if (skills_offered) updates.skills_offered = skills_offered;
+    if (skills_wanted) updates.skills_wanted = skills_wanted;
     if (profileImage) updates.profileImage = profileImage;
 
     const updatedUser = await User.findByIdAndUpdate(req.user._id, updates, {

@@ -33,6 +33,7 @@ app.get('/', (req, res) => {
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/user', require('./routes/userRoute'));
 app.use('/api/chat', require('./routes/chatRoutes'));
+app.use('/api/barter', require('./routes/barterRoutes'));
 app.use('/api/subscription', require('./routes/subscription'));
 app.use('/webhook', require('./routes/webhook'))
 
