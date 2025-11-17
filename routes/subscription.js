@@ -12,6 +12,9 @@ router.post('/create-checkout-session', SubscriptionController.createCheckoutSes
 // Get subscription status
 router.get('/status', SubscriptionController.getSubscriptionStatus);
 
+// Verify subscription from Stripe
+router.post('/verify', SubscriptionController.verifySubscription);
+
 // Cancel subscription
 router.post('/cancel', SubscriptionController.cancelSubscription);
 

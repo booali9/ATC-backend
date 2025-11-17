@@ -8,19 +8,27 @@ const {
   proposeBarter,
   acceptBarter,
   completeBarter,
-  getSkillSuggestions
+  getSkillSuggestions,
+  getActiveTrades,
+  getPendingFriendRequests,
+  getPendingBarters
 } = require('../controllers/barterController');
 
 // Friend request routes
+router.get('/friend-requests', auth, getPendingFriendRequests);
+router.get('/pending-barters', auth, getPendingBarters);
 router.post('/friend-request', auth, checkSubscriptionForFriendRequest, sendFriendRequest);
 router.put('/friend-request/:requestId/accept', auth, acceptFriendRequest);
+
+// Get active trades (MUST be before /:barterId routes)
+router.get('/trades', auth, getActiveTrades);
+
+// Skill suggestions
+router.get('/suggestions', auth, getSkillSuggestions);
 
 // Barter routes
 router.post('/barter', auth, proposeBarter);
 router.put('/barter/:barterId/accept', auth, acceptBarter);
 router.put('/barter/complete', auth, completeBarter);
-
-// Skill suggestions
-router.get('/suggestions', auth, getSkillSuggestions);
 
 module.exports = router;

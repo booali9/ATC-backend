@@ -28,17 +28,31 @@ exports.sendTextMessage = async (req, res) => {
       sender: req.user._id,
       type: 'text',
       content,
-      seenBy: [req.user._id]
+      seenBy: [req.user._id],
+      createdAt: new Date()
     };
     chat.messages.push(message);
     chat.updatedAt = new Date();
     await chat.save();
 
-    // Emit via Socket.io
+    // Emit via Socket.io with full message object
     const io = req.app.get('io');
-    io.to(chatId.toString()).emit('newMessage', { chatId, message });
+    const savedMessage = chat.messages[chat.messages.length - 1];
+    const fullMessage = {
+      _id: savedMessage._id.toString(),
+      sender: req.user._id.toString(),
+      type: 'text',
+      content,
+      seenBy: [req.user._id.toString()],
+      createdAt: savedMessage.createdAt,
+      chatId: chatId.toString()
+    };
+    
+    console.log('📤 Emitting newMessage to room:', chatId.toString());
+    console.log('📤 Message:', fullMessage);
+    io.to(chatId.toString()).emit('newMessage', fullMessage);
 
-    res.json({ success: true, message });
+    res.json({ success: true, message: fullMessage });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -73,16 +87,30 @@ exports.sendMediaMessage = async (req, res) => {
       sender: req.user._id,
       type: req.file.mimetype.startsWith('image') ? 'image' : 'voice',
       content: result.secure_url,
-      seenBy: [req.user._id]
+      seenBy: [req.user._id],
+      createdAt: new Date()
     };
     chat.messages.push(message);
     chat.updatedAt = new Date();
     await chat.save();
 
     const io = req.app.get('io');
-    io.to(chatId.toString()).emit('newMessage', { chatId, message });
+    const savedMessage = chat.messages[chat.messages.length - 1];
+    const fullMessage = {
+      _id: savedMessage._id.toString(),
+      sender: req.user._id.toString(),
+      type: savedMessage.type,
+      content: result.secure_url,
+      seenBy: [req.user._id.toString()],
+      createdAt: savedMessage.createdAt,
+      chatId: chatId.toString()
+    };
+    
+    console.log('📤 Emitting media newMessage to room:', chatId.toString());
+    console.log('📤 Message:', fullMessage);
+    io.to(chatId.toString()).emit('newMessage', fullMessage);
 
-    res.json({ success: true, message });
+    res.json({ success: true, message: fullMessage });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -115,7 +143,13 @@ exports.getChatMessages = async (req, res) => {
       .populate('messages.sender', 'name profileImage');
     if (!chat) return res.status(404).json({ message: 'Chat not found' });
 
-    res.json({ success: true, chat });
+    // Convert sender to string ID for consistency
+    const messages = chat.messages.map(msg => ({
+      ...msg.toObject(),
+      sender: msg.sender?._id?.toString() || msg.sender
+    }));
+
+    res.json({ success: true, messages, chat: { ...chat.toObject(), messages } });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -157,13 +191,16 @@ exports.getUserChats = async (req, res) => {
       const unreadCount = chat.messages.filter(msg => !msg.seenBy.includes(userId)).length;
 
       return {
-        chatId: chat._id,
+        _id: chat._id,
+        participants: chat.participants,
         otherUser: otherUser ? { _id: otherUser._id, name: otherUser.name, profileImage: otherUser.profileImage } : null,
         lastMessage,
         unreadCount,
         updatedAt: chat.updatedAt
       };
     });
+
+    console.log('📋 Returning chats:', chatList.length);
 
     res.json({ success: true, chats: chatList });
   } catch (error) {

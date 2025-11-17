@@ -9,7 +9,7 @@ const server = http.createServer(app);
 const { Server } = require('socket.io');
 
 const io = new Server(server, {
-  cors: { origin: ['http://localhost:3000'], methods: ['GET', 'POST'] }
+  cors: { origin: ['http://localhost:3000', 'http://10.47.175.21:8081', 'http://10.47.175.21:3000'], methods: ['GET', 'POST'] }
 });
 app.set('io', io);
 
@@ -51,6 +51,45 @@ io.on('connection', (socket) => {
     console.log(`🔴 User left chat room: ${chatId}`);
   });
 
+  // ============ CALL EVENTS ============
+  
+  socket.on('initiateCall', (data) => {
+    console.log('📞 Call initiated:', data);
+    // Broadcast to the chat room except sender
+    socket.to(data.chatId).emit('callInitiated', {
+      chatId: data.chatId,
+      callerId: data.callerId,
+      callerName: data.callerName,
+      callType: data.callType,
+    });
+  });
+
+  socket.on('acceptCall', (data) => {
+    console.log('✅ Call accepted:', data);
+    // Notify the caller
+    socket.to(data.chatId).emit('callAccepted', {
+      chatId: data.chatId,
+      receiverId: data.receiverId,
+    });
+  });
+
+  socket.on('rejectCall', (data) => {
+    console.log('❌ Call rejected:', data);
+    // Notify the caller
+    socket.to(data.chatId).emit('callRejected', {
+      chatId: data.chatId,
+      receiverId: data.receiverId,
+    });
+  });
+
+  socket.on('endCall', (data) => {
+    console.log('📞 Call ended:', data);
+    // Notify all participants
+    io.to(data.chatId).emit('callEnded', {
+      chatId: data.chatId,
+    });
+  });
+
   socket.on('disconnect', () => {
     console.log('❌ Client disconnected:', socket.id);
   });
@@ -58,6 +97,7 @@ io.on('connection', (socket) => {
 
 // Start server
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+const HOST = '0.0.0.0';
+server.listen(PORT, HOST, () => {
+  console.log(`🚀 Server running on http://10.47.175.21:${PORT}`);
 });

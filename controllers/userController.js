@@ -4,9 +4,25 @@ const jwt = require('jsonwebtoken');
 const cloudinary = require('../config/cloudinary');
 
 // ✅ Get Profile
-exports. getProfile = async (req, res) => {
+exports.getProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select('-password');
+    res.json({ success: true, user });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+// ✅ Get Another User's Profile by ID
+exports.getUserById = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const user = await User.findById(userId).select('-password');
+    
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    
     res.json({ success: true, user });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
@@ -36,8 +52,8 @@ exports.editProfile = async (req, res) => {
     const updates = {};
     if (name) updates.name = name;
     if (phone) updates.phone = phone;
-    if (skills_offered) updates.skills_offered = skills_offered;
-    if (skills_wanted) updates.skills_wanted = skills_wanted;
+    if (skills) updates.skills_offered = Array.isArray(skills) ? skills : [skills];
+    if (serviceSeeking) updates.skills_wanted = serviceSeeking;
     if (profileImage) updates.profileImage = profileImage;
 
     const updatedUser = await User.findByIdAndUpdate(req.user._id, updates, {
@@ -95,5 +111,57 @@ exports.deleteAccount = async (req, res) => {
     res.json({ success: true, message: 'Account deleted successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error deleting account', error: error.message });
+  }
+};
+
+// ✅ Search Users
+exports.searchUsers = async (req, res) => {
+  try {
+    const { query } = req.query;
+    const currentUserId = req.user._id;
+
+    if (!query || query.trim().length === 0) {
+      return res.json({ success: true, users: [] });
+    }
+
+    // Search by name or email, excluding current user
+    const users = await User.find({
+      _id: { $ne: currentUserId },
+      $or: [
+        { name: { $regex: query, $options: 'i' } },
+        { email: { $regex: query, $options: 'i' } }
+      ]
+    }).select('_id name email profileImage skills_offered skills_wanted rating').limit(20);
+
+    res.json({ success: true, users });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error searching users', error: error.message });
+  }
+};
+
+// ✅ Admin: Add credits to user (for refunds/corrections)
+exports.addCredits = async (req, res) => {
+  try {
+    const { userId, credits, reason } = req.body;
+    
+    if (!userId || !credits) {
+      return res.status(400).json({ success: false, message: 'userId and credits are required' });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $inc: { credits: credits } },
+      { new: true }
+    ).select('-password');
+
+    console.log(`✅ Added ${credits} credits to user ${user.email}. Reason: ${reason || 'Manual adjustment'}`);
+
+    res.json({ 
+      success: true, 
+      message: `Successfully added ${credits} credits`,
+      user 
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 };

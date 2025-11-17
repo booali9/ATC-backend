@@ -61,6 +61,11 @@ class SubscriptionController {
         });
       }
 
+      // Use web URLs with redirect flags for in-app browser
+      // The HTML pages will handle closing the browser and redirecting
+      const successUrl = `${frontendUrl}/SubscriptionSuccess.html?mobile=true&session_id={CHECKOUT_SESSION_ID}`;
+      const cancelUrl = `${frontendUrl}/SubscriptionCancel.html?mobile=true`;
+
       // Create checkout session
       const session = await stripe.checkout.sessions.create({
         customer: customerId,
@@ -72,8 +77,8 @@ class SubscriptionController {
           },
         ],
         mode: 'subscription',
-        success_url: `${frontendUrl}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${frontendUrl}/subscription/cancel`,
+        success_url: successUrl,
+        cancel_url: cancelUrl,
         metadata: {
           userId: userId.toString(),
           plan: plan
@@ -155,16 +160,32 @@ class SubscriptionController {
       return;
     }
 
+    console.log(`📊 Before activation - Status: ${user.subscription.status}, Credits: ${user.credits}`);
+
+    // Track if subscription was previously inactive
+    const wasInactive = user.subscription.status !== 'active';
+    
     user.subscription.plan = plan;
     user.subscription.stripeSubscriptionId = subscription.id;
     user.subscription.status = subscription.status;
-    user.subscription.currentPeriodEnd = new Date(subscription.current_period_end * 1000);
-    user.subscription.cancelAtPeriodEnd = subscription.cancel_at_period_end;
     
-    // Add credits only for new subscriptions or period renewal
-    if (subscription.status === 'active') {
+    // Safely handle date conversion
+    if (subscription.current_period_end) {
+      user.subscription.currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+    } else {
+      console.log(`⚠️ No current_period_end, using 30 days from now`);
+      user.subscription.currentPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    }
+    
+    user.subscription.cancelAtPeriodEnd = subscription.cancel_at_period_end || false;
+    
+    // Add credits only when subscription becomes active (not already active)
+    if (subscription.status === 'active' && wasInactive) {
       user.credits += selectedPlan.credits;
-      console.log(`✅ Added ${selectedPlan.credits} credits to user ${user.email}`);
+      console.log(`✅ Added ${selectedPlan.credits} credits to user ${user.email} (status changed to active)`);
+      console.log(`📊 New credit balance: ${user.credits}`);
+    } else {
+      console.log(`ℹ️ Credits not modified. Already active or status not active. Current credits: ${user.credits}`);
     }
 
     await user.save();
@@ -213,6 +234,99 @@ class SubscriptionController {
       res.status(500).json({
         success: false,
         message: 'Error fetching subscription status',
+        error: error.message
+      });
+    }
+  }
+
+  // Verify and sync subscription from Stripe
+  async verifySubscription(req, res) {
+    try {
+      const user = await User.findById(req.user.id);
+      
+      if (!user || !user.subscription.stripeCustomerId) {
+        return res.status(400).json({
+          success: false,
+          message: 'No Stripe customer found'
+        });
+      }
+
+      // Get subscriptions from Stripe
+      const subscriptions = await stripe.subscriptions.list({
+        customer: user.subscription.stripeCustomerId,
+        limit: 1
+      });
+
+      if (subscriptions.data.length > 0) {
+        const subscription = subscriptions.data[0];
+        const plan = subscription.metadata?.plan || 'basic';
+        const selectedPlan = subscriptionPlans[plan];
+
+        console.log(`🔄 Syncing subscription for user ${user.email}:`, subscription.status);
+        console.log(`📊 Subscription object:`, JSON.stringify(subscription, null, 2));
+        console.log(`📊 Current user credits: ${user.credits}`);
+        console.log(`📊 Current subscription status: ${user.subscription.status}`);
+
+        // Track if this is a new subscription or status change
+        const wasInactive = user.subscription.status !== 'active';
+        const isNowActive = subscription.status === 'active';
+
+        // Update user with latest subscription info
+        user.subscription.plan = plan;
+        user.subscription.stripeSubscriptionId = subscription.id;
+        user.subscription.status = subscription.status;
+        
+        // Safely handle date conversion
+        if (subscription.current_period_end) {
+          user.subscription.currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+          console.log(`📅 Period end date: ${user.subscription.currentPeriodEnd}`);
+        } else {
+          console.log(`⚠️ No current_period_end in subscription, using 30 days from now`);
+          user.subscription.currentPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        }
+        
+        user.subscription.cancelAtPeriodEnd = subscription.cancel_at_period_end || false;
+
+        // Add credits if subscription just became active
+        if (isNowActive && wasInactive) {
+          user.credits += selectedPlan.credits;
+          console.log(`✅ Added ${selectedPlan.credits} credits to user ${user.email} (new subscription)`);
+          console.log(`📊 New credit balance: ${user.credits}`);
+        } else if (isNowActive && user.credits === 0) {
+          // Special case: active subscription but 0 credits (webhook might have failed)
+          user.credits += selectedPlan.credits;
+          console.log(`⚠️ CORRECTION: User has active subscription but 0 credits. Adding ${selectedPlan.credits} credits.`);
+          console.log(`📊 New credit balance: ${user.credits}`);
+        } else if (isNowActive) {
+          console.log(`ℹ️ Subscription already active, credits not modified. Current: ${user.credits}`);
+        }
+
+        await user.save();
+
+        return res.json({
+          success: true,
+          message: 'Subscription verified and synced',
+          data: {
+            subscription: user.subscription,
+            credits: user.credits
+          }
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'No active subscription found',
+        data: {
+          subscription: user.subscription,
+          credits: user.credits
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Verify subscription error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error verifying subscription',
         error: error.message
       });
     }

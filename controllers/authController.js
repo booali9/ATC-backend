@@ -143,8 +143,8 @@ const completeProfile = async (req, res) => {
     }
 
     user.profileImage = profileImage;
-    user.skills = typeof skills === 'string' ? skills.split(',') : skills;
-    user.serviceSeeking = serviceSeeking;
+    user.skills_offered = typeof skills === 'string' ? skills.split(',') : skills;
+    user.skills_wanted = serviceSeeking;
 
     await user.save();
 
@@ -160,9 +160,10 @@ const completeProfile = async (req, res) => {
         email: user.email,
         phone: user.phone,
         profileImage: user.profileImage,
-        skills: user.skills,
-        serviceSeeking: user.serviceSeeking,
-        isVerified: user.isVerified
+        skills: user.skills_offered,
+        serviceSeeking: user.skills_wanted,
+        isVerified: user.isVerified,
+        credits: user.credits
       }
     });
 
@@ -205,9 +206,10 @@ const login = async (req, res) => {
         email: user.email,
         phone: user.phone,
         profileImage: user.profileImage,
-        skills: user.skills,
-        serviceSeeking: user.serviceSeeking,
-        isVerified: user.isVerified
+        skills: user.skills_offered,
+        serviceSeeking: user.skills_wanted,
+        isVerified: user.isVerified,
+        credits: user.credits
       }
     });
 
