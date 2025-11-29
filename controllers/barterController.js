@@ -1,8 +1,13 @@
 const FriendRequest = require('../models/FriendRequest');
 const User = require('../models/User');
 const Barter = require('../models/Barter');
+const { 
+  sendBarterProposalNotification, 
+  sendFriendRequestAcceptedNotification,
+  sendBarterAcceptedNotification 
+} = require('../utils/pushNotifications');
 
-// Send friend request with 100 credit deduction
+// Send friend request with 10 credit deduction
 exports.sendFriendRequest = async (req, res) => {
   try {
     const { toUserId } = req.body;
@@ -14,8 +19,8 @@ exports.sendFriendRequest = async (req, res) => {
     }
 
     // Check if user has enough credits
-    if (req.user.credits < 100) {
-      return res.status(400).json({ success: false, message: 'Insufficient credits. Need 100 credits to send friend request' });
+    if (req.user.credits < 10) {
+      return res.status(400).json({ success: false, message: 'Insufficient credits. Need 10 credits to send friend request' });
     }
 
     // Check if request already exists
@@ -34,9 +39,9 @@ exports.sendFriendRequest = async (req, res) => {
     const friendRequest = new FriendRequest({ from: fromUserId, to: toUserId });
     await friendRequest.save();
 
-    // Deduct 100 credits AFTER successful creation
-    await User.findByIdAndUpdate(fromUserId, { $inc: { credits: -100 } });
-    console.log(`✅ Deducted 100 credits from user ${fromUserId} for friend request to ${toUserId}`);
+    // Deduct 10 credits AFTER successful creation
+    await User.findByIdAndUpdate(fromUserId, { $inc: { credits: -10 } });
+    console.log(`✅ Deducted 10 credits from user ${fromUserId} for friend request to ${toUserId}`);
 
     res.json({ success: true, message: 'Friend request sent successfully', friendRequest });
   } catch (error) {
@@ -103,6 +108,10 @@ exports.acceptFriendRequest = async (req, res) => {
     // Deduct 10 credits from sender AFTER all updates succeed
     await User.findByIdAndUpdate(friendRequest.from, { $inc: { credits: -10 } });
     console.log(`✅ Deducted 10 credits from user ${friendRequest.from} for accepting friend request`);
+
+    // Send push notification to the original sender
+    const accepter = await User.findById(userId);
+    sendFriendRequestAcceptedNotification(friendRequest.from.toString(), accepter.name);
 
     res.json({ success: true, message: 'Friend request accepted' });
   } catch (error) {
@@ -180,6 +189,13 @@ exports.proposeBarter = async (req, res) => {
     await User.findByIdAndUpdate(currentUserId, { $inc: { credits: -10 } });
     console.log(`✅ Deducted 10 credits from user ${currentUserId} for proposing barter`);
 
+    // Send push notification to the accepter (target user)
+    const proposer = await User.findById(currentUserId);
+    const targetUserId = friendRequest.from.toString() === currentUserId.toString() 
+      ? friendRequest.to.toString() 
+      : friendRequest.from.toString();
+    sendBarterProposalNotification(targetUserId, proposer.name, offered_skill);
+
     res.json({ success: true, message: 'Barter proposed successfully', barter });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
@@ -214,6 +230,10 @@ exports.acceptBarter = async (req, res) => {
     // Deduct 10 credits AFTER successful update
     await User.findByIdAndUpdate(userId, { $inc: { credits: -10 } });
     console.log(`✅ Deducted 10 credits from user ${userId} for accepting barter`);
+
+    // Send push notification to the proposer
+    const accepter = await User.findById(userId);
+    sendBarterAcceptedNotification(barter.requester.toString(), accepter.name, barterId);
 
     res.json({ success: true, message: 'Barter accepted. You can now message each other.' });
   } catch (error) {
@@ -368,6 +388,39 @@ exports.getPendingFriendRequests = async (req, res) => {
     .sort({ createdAt: -1 });
 
     res.json({ success: true, friendRequests });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+// Get all friend requests (sent and received) for current user
+exports.getAllFriendRequests = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    // Get requests sent TO current user
+    const receivedRequests = await FriendRequest.find({
+      to: userId,
+      status: 'pending'
+    })
+    .populate('from', 'name email profileImage rating')
+    .populate('to', 'name email profileImage rating')
+    .sort({ createdAt: -1 });
+
+    // Get requests sent BY current user
+    const sentRequests = await FriendRequest.find({
+      from: userId,
+      status: 'pending'
+    })
+    .populate('from', 'name email profileImage rating')
+    .populate('to', 'name email profileImage rating')
+    .sort({ createdAt: -1 });
+
+    res.json({ 
+      success: true, 
+      receivedRequests,
+      sentRequests
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }

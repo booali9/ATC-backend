@@ -9,7 +9,7 @@ const server = http.createServer(app);
 const { Server } = require('socket.io');
 
 const io = new Server(server, {
-  cors: { origin: ['http://localhost:3000', 'http://10.47.175.21:8081', 'http://10.47.175.21:3000'], methods: ['GET', 'POST'] }
+  cors: { origin: ['http://localhost:3000', 'http://10.48.15.21:8081', 'http://10.48.15.21:3000', 'http://10.48.15.21:5000'], methods: ['GET', 'POST'] }
 });
 app.set('io', io);
 
@@ -35,6 +35,7 @@ app.use('/api/user', require('./routes/userRoute'));
 app.use('/api/chat', require('./routes/chatRoutes'));
 app.use('/api/barter', require('./routes/barterRoutes'));
 app.use('/api/subscription', require('./routes/subscription'));
+app.use('/api/cron', require('./routes/cronRoutes'));
 app.use('/webhook', require('./routes/webhook'))
 
 // Socket.IO
@@ -99,5 +100,5 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 5000;
 const HOST = '0.0.0.0';
 server.listen(PORT, HOST, () => {
-  console.log(`🚀 Server running on http://10.47.175.21:${PORT}`);
+  console.log(`🚀 Server running on http://10.48.15.21:${PORT}`);
 });

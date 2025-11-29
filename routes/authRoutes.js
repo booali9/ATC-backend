@@ -5,6 +5,7 @@ const {
   verifyOtp,
   completeProfile,
   login,
+  oauthLogin,
   forgotPassword,
   resetPassword,
   getProfile
@@ -17,6 +18,7 @@ const upload = require('../middleware/upload');
 router.post('/register', register);
 router.post('/verify-otp', verifyOtp);
 router.post('/login', login);
+router.post('/oauth-login', oauthLogin);
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
 router.post('/complete-profile', auth, upload.single('profileImage'), completeProfile);

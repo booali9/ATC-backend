@@ -11,11 +11,13 @@ const {
   getSkillSuggestions,
   getActiveTrades,
   getPendingFriendRequests,
-  getPendingBarters
+  getPendingBarters,
+  getAllFriendRequests
 } = require('../controllers/barterController');
 
 // Friend request routes
 router.get('/friend-requests', auth, getPendingFriendRequests);
+router.get('/friend-requests/all', auth, getAllFriendRequests);
 router.get('/pending-barters', auth, getPendingBarters);
 router.post('/friend-request', auth, checkSubscriptionForFriendRequest, sendFriendRequest);
 router.put('/friend-request/:requestId/accept', auth, acceptFriendRequest);

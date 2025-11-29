@@ -300,11 +300,63 @@ const getProfile = async (req, res) => {
   }
 };
 
+// OAuth Login - For users authenticated via OAuth providers (Google, Apple, Facebook)
+// These users are already verified by the provider, so we just need to find them and issue a token
+const oauthLogin = async (req, res) => {
+  try {
+    const { email, clerkId, provider } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    // Find user by email
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found. Please sign up first.' });
+    }
+
+    // For OAuth users, we trust the provider's verification
+    // Mark as verified if not already
+    if (!user.isVerified) {
+      user.isVerified = true;
+      await user.save();
+    }
+
+    // Generate JWT token
+    const token = generateToken(user._id);
+
+    console.log(`✅ OAuth login successful for ${email} via ${provider}`);
+
+    res.status(200).json({
+      message: 'OAuth login successful',
+      token: token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        profileImage: user.profileImage,
+        skills: user.skills_offered,
+        serviceSeeking: user.skills_wanted,
+        isVerified: user.isVerified,
+        credits: user.credits
+      }
+    });
+
+  } catch (error) {
+    console.error('OAuth login error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   register,
   verifyOtp,
   completeProfile,
   login,
+  oauthLogin,
   forgotPassword,
   resetPassword,
   getProfile

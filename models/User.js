@@ -72,6 +72,19 @@ const userSchema = new mongoose.Schema({
   resetOtp: {
     code: String,
     expiresAt: Date
+  },
+  
+  // Push notification token
+  expoPushToken: {
+    type: String,
+    default: null
+  },
+  
+  // Notification preferences
+  notificationPreferences: {
+    email: { type: Boolean, default: true },
+    push: { type: Boolean, default: true },
+    subscriptionReminders: { type: Boolean, default: true }
   }
 }, {
   timestamps: true

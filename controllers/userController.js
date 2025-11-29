@@ -165,3 +165,70 @@ exports.addCredits = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 };
+
+// ✅ Save Push Token
+exports.savePushToken = async (req, res) => {
+  try {
+    const { expoPushToken } = req.body;
+
+    if (!expoPushToken) {
+      return res.status(400).json({ success: false, message: 'Push token is required' });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { expoPushToken: expoPushToken },
+      { new: true }
+    ).select('-password');
+
+    console.log(`✅ Push token saved for user ${user.email}`);
+
+    res.json({
+      success: true,
+      message: 'Push token saved successfully',
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error saving push token', error: error.message });
+  }
+};
+
+// ✅ Update Notification Preferences
+exports.updateNotificationPreferences = async (req, res) => {
+  try {
+    const { email, push, subscriptionReminders } = req.body;
+
+    const updates = {};
+    if (typeof email === 'boolean') updates['notificationPreferences.email'] = email;
+    if (typeof push === 'boolean') updates['notificationPreferences.push'] = push;
+    if (typeof subscriptionReminders === 'boolean') updates['notificationPreferences.subscriptionReminders'] = subscriptionReminders;
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { $set: updates },
+      { new: true }
+    ).select('-password');
+
+    res.json({
+      success: true,
+      message: 'Notification preferences updated',
+      notificationPreferences: user.notificationPreferences,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error updating preferences', error: error.message });
+  }
+};
+
+// ✅ Remove Push Token (on logout)
+exports.removePushToken = async (req, res) => {
+  try {
+    await User.findByIdAndUpdate(req.user._id, { expoPushToken: null });
+
+    res.json({
+      success: true,
+      message: 'Push token removed successfully',
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error removing push token', error: error.message });
+  }
+};
+
