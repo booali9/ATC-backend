@@ -64,10 +64,17 @@ class SubscriptionController {
         });
       }
 
-      // Use deep linking scheme for mobile app to redirect back properly
-      // The atc:// scheme is configured in the mobile app's app.json
-      const successUrl = `atc://subscription/success?session_id={CHECKOUT_SESSION_ID}`;
-      const cancelUrl = `atc://subscription/cancel`;
+      // Use backend redirect endpoints that will redirect to app deep links
+      // This is needed because Stripe only accepts http/https URLs
+      // BACKEND_URL should be set to the deployed backend URL like https://king-prawn-app-wksnq.ondigitalocean.app
+      const backendUrl =
+        process.env.BACKEND_URL ||
+        "https://king-prawn-app-wksnq.ondigitalocean.app";
+      const successUrl = `${backendUrl}/api/subscription/success?session_id={CHECKOUT_SESSION_ID}`;
+      const cancelUrl = `${backendUrl}/api/subscription/cancel`;
+
+      console.log("🔗 Success URL:", successUrl);
+      console.log("🔗 Cancel URL:", cancelUrl);
 
       // Create checkout session
       const session = await stripe.checkout.sessions.create({
