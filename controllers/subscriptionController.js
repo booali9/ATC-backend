@@ -66,10 +66,8 @@ class SubscriptionController {
 
       // Use backend redirect endpoints that will redirect to app deep links
       // This is needed because Stripe only accepts http/https URLs
-      // BACKEND_URL should be set to the deployed backend URL like https://king-prawn-app-wksnq.ondigitalocean.app
-      const backendUrl =
-        process.env.BACKEND_URL ||
-        "https://king-prawn-app-wksnq.ondigitalocean.app";
+      // HARDCODED to production backend URL to ensure it always works
+      const backendUrl = "https://king-prawn-app-wksnq.ondigitalocean.app";
       const successUrl = `${backendUrl}/api/subscription/success?session_id={CHECKOUT_SESSION_ID}`;
       const cancelUrl = `${backendUrl}/api/subscription/cancel`;
 
