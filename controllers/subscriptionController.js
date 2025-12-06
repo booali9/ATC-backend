@@ -69,7 +69,7 @@ class SubscriptionController {
       // Use backend redirect endpoints that will redirect to app deep links
       // This is needed because Stripe only accepts http/https URLs
       // HARDCODED to production backend URL to ensure it always works
-      const backendUrl = "https://king-prawn-app-wksnq.ondigitalocean.app";
+      const backendUrl = "https://backend-azure-psi.vercel.app";
 
       // Include the app's redirect URL as a query parameter so backend can do HTTP 302 redirect
       // This enables openAuthSessionAsync to properly return to the app
