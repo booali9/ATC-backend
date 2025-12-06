@@ -91,4 +91,8 @@ router.post("/cancel", SubscriptionController.cancelSubscription);
 // Get available plans
 router.get("/plans", SubscriptionController.getSubscriptionPlans);
 
+// Admin route for manual credit addition (to fix issues)
+// This should be protected by admin middleware in production
+router.post("/admin/add-credits", SubscriptionController.addCreditsManually);
+
 module.exports = router;
