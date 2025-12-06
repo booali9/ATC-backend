@@ -206,7 +206,7 @@ class SubscriptionController {
       // Get the subscription details from Stripe
       const subscription = await stripe.subscriptions.retrieve(subscriptionId);
       const plan =
-        subscription.metadata?.plan || user.subscription.plan || "basic";
+        subscription.metadata?.plan || user.subscription?.plan || "basic";
       const selectedPlan = subscriptionPlans[plan];
 
       if (!selectedPlan) {
@@ -219,53 +219,54 @@ class SubscriptionController {
       );
 
       // Check if this invoice has already been processed
-      // We use the invoice ID to prevent duplicate credit additions
       const invoiceId = invoice.id;
+      const currentProcessedInvoices = user.processedInvoices || [];
 
-      // Store processed invoice IDs in user document to prevent duplicates
-      if (!user.processedInvoices) {
-        user.processedInvoices = [];
-      }
-
-      if (user.processedInvoices.includes(invoiceId)) {
+      if (currentProcessedInvoices.includes(invoiceId)) {
         console.log(
           `⚠️ Invoice ${invoiceId} already processed, skipping credit addition`,
         );
         return;
       }
 
-      // Add credits for the paid invoice
+      // Use findOneAndUpdate to avoid version conflicts
       const creditsToAdd = selectedPlan.credits;
-      user.credits += creditsToAdd;
 
-      // Mark this invoice as processed
-      user.processedInvoices.push(invoiceId);
-
-      // Keep only the last 50 invoice IDs to prevent unbounded growth
-      if (user.processedInvoices.length > 50) {
-        user.processedInvoices = user.processedInvoices.slice(-50);
-      }
-
-      // Update subscription info
-      user.subscription.plan = plan;
-      user.subscription.stripeSubscriptionId = subscriptionId;
-      user.subscription.status = subscription.status;
-
-      if (subscription.current_period_end) {
-        user.subscription.currentPeriodEnd = new Date(
-          subscription.current_period_end * 1000,
-        );
-      }
-
-      user.subscription.cancelAtPeriodEnd =
-        subscription.cancel_at_period_end || false;
-
-      await user.save();
-
-      console.log(
-        `✅ Added ${creditsToAdd} credits to ${user.email} for invoice ${invoiceId}`,
+      const updatedUser = await User.findOneAndUpdate(
+        {
+          _id: user._id,
+          processedInvoices: { $ne: invoiceId }, // Double-check not already processed
+        },
+        {
+          $set: {
+            "subscription.plan": plan,
+            "subscription.stripeSubscriptionId": subscriptionId,
+            "subscription.status": subscription.status,
+            "subscription.currentPeriodEnd": subscription.current_period_end
+              ? new Date(subscription.current_period_end * 1000)
+              : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            "subscription.cancelAtPeriodEnd":
+              subscription.cancel_at_period_end || false,
+          },
+          $inc: { credits: creditsToAdd },
+          $push: {
+            processedInvoices: {
+              $each: [invoiceId],
+              $slice: -50, // Keep only last 50
+            },
+          },
+        },
+        { new: true, runValidators: false },
       );
-      console.log(`📊 New credit balance: ${user.credits}`);
+
+      if (updatedUser) {
+        console.log(
+          `✅ Added ${creditsToAdd} credits to ${user.email} for invoice ${invoiceId}`,
+        );
+        console.log(`📊 New credit balance: ${updatedUser.credits}`);
+      } else {
+        console.log(`ℹ️ Invoice ${invoiceId} was already processed (race condition prevented)`);
+      }
     } catch (error) {
       console.error("❌ Error handling invoice.payment_succeeded:", error);
     }
@@ -318,7 +319,7 @@ class SubscriptionController {
         return;
       }
 
-      const user = await User.findOne({
+      let user = await User.findOne({
         "subscription.stripeCustomerId": customerId,
       });
 
@@ -326,23 +327,20 @@ class SubscriptionController {
         // Try to find by userId in metadata
         const userId = session.metadata?.userId;
         if (userId) {
-          const userByMetadata = await User.findById(userId);
-          if (userByMetadata) {
+          // Use findByIdAndUpdate to set the customer ID atomically
+          user = await User.findByIdAndUpdate(
+            userId,
+            { $set: { "subscription.stripeCustomerId": customerId } },
+            { new: true, runValidators: false },
+          );
+          if (user) {
             console.log(`✅ Found user by metadata userId: ${userId}`);
-            // Associate the Stripe customer with this user
-            userByMetadata.subscription.stripeCustomerId = customerId;
-            await userByMetadata.save();
-            // Continue processing with this user
-            await this.processCheckoutForUser(
-              userByMetadata,
-              session,
-              subscriptionId,
-            );
-            return;
           }
         }
-        console.log("❌ User not found for customer:", customerId);
-        return;
+        if (!user) {
+          console.log("❌ User not found for customer:", customerId);
+          return;
+        }
       }
 
       await this.processCheckoutForUser(user, session, subscriptionId);
@@ -352,7 +350,7 @@ class SubscriptionController {
   }
 
   async processCheckoutForUser(user, session, subscriptionId) {
-    const plan = session.metadata?.plan || user.subscription.plan || "basic";
+    const plan = session.metadata?.plan || user.subscription?.plan || "basic";
     const selectedPlan = subscriptionPlans[plan];
 
     if (!selectedPlan) {
@@ -367,72 +365,74 @@ class SubscriptionController {
 
     // Check if this session has already been processed
     const sessionId = session.id;
-    if (!user.processedCheckoutSessions) {
-      user.processedCheckoutSessions = [];
-    }
+    const currentProcessedSessions = user.processedCheckoutSessions || [];
 
-    if (user.processedCheckoutSessions.includes(sessionId)) {
+    if (currentProcessedSessions.includes(sessionId)) {
       console.log(
         `⚠️ Checkout session ${sessionId} already processed, skipping`,
       );
       return;
     }
 
-    // Add credits for the new subscription
+    // Use findOneAndUpdate to avoid version conflicts
     const creditsToAdd = selectedPlan.credits;
-    user.credits += creditsToAdd;
 
-    // Mark this session as processed
-    user.processedCheckoutSessions.push(sessionId);
-
-    // Keep only the last 20 session IDs
-    if (user.processedCheckoutSessions.length > 20) {
-      user.processedCheckoutSessions =
-        user.processedCheckoutSessions.slice(-20);
-    }
-
-    // Update subscription info
-    user.subscription.plan = plan;
-    user.subscription.stripeSubscriptionId = subscriptionId;
-    user.subscription.status = subscription.status;
-
-    if (subscription.current_period_end) {
-      user.subscription.currentPeriodEnd = new Date(
-        subscription.current_period_end * 1000,
-      );
-    }
-
-    user.subscription.cancelAtPeriodEnd =
-      subscription.cancel_at_period_end || false;
-
-    await user.save();
-
-    console.log(
-      `✅ Checkout completed: Added ${creditsToAdd} credits to ${user.email}`,
+    const updatedUser = await User.findOneAndUpdate(
+      {
+        _id: user._id,
+        processedCheckoutSessions: { $ne: sessionId }, // Double-check not already processed
+      },
+      {
+        $set: {
+          "subscription.plan": plan,
+          "subscription.stripeSubscriptionId": subscriptionId,
+          "subscription.status": subscription.status,
+          "subscription.currentPeriodEnd": subscription.current_period_end
+            ? new Date(subscription.current_period_end * 1000)
+            : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          "subscription.cancelAtPeriodEnd":
+            subscription.cancel_at_period_end || false,
+        },
+        $inc: { credits: creditsToAdd },
+        $push: {
+          processedCheckoutSessions: {
+            $each: [sessionId],
+            $slice: -20, // Keep only last 20
+          },
+        },
+      },
+      { new: true, runValidators: false },
     );
-    console.log(`📊 New credit balance: ${user.credits}`);
+
+    if (updatedUser) {
+      console.log(
+        `✅ Checkout completed: Added ${creditsToAdd} credits to ${user.email}`,
+      );
+      console.log(`📊 New credit balance: ${updatedUser.credits}`);
+    } else {
+      console.log(`ℹ️ Session ${sessionId} was already processed (race condition prevented)`);
+    }
   }
 
   // Update subscription info without adding credits
   async updateSubscriptionInfo(user, subscription, plan) {
-    user.subscription.plan = plan;
-    user.subscription.stripeSubscriptionId = subscription.id;
-    user.subscription.status = subscription.status;
-
-    if (subscription.current_period_end) {
-      user.subscription.currentPeriodEnd = new Date(
-        subscription.current_period_end * 1000,
-      );
-    } else {
-      user.subscription.currentPeriodEnd = new Date(
-        Date.now() + 30 * 24 * 60 * 60 * 1000,
-      );
-    }
-
-    user.subscription.cancelAtPeriodEnd =
-      subscription.cancel_at_period_end || false;
-
-    await user.save();
+    // Use findByIdAndUpdate to avoid version conflicts
+    await User.findByIdAndUpdate(
+      user._id,
+      {
+        $set: {
+          "subscription.plan": plan,
+          "subscription.stripeSubscriptionId": subscription.id,
+          "subscription.status": subscription.status,
+          "subscription.currentPeriodEnd": subscription.current_period_end
+            ? new Date(subscription.current_period_end * 1000)
+            : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          "subscription.cancelAtPeriodEnd":
+            subscription.cancel_at_period_end || false,
+        },
+      },
+      { runValidators: false },
+    );
     console.log(
       `✅ Subscription info updated for ${user.email}, status: ${subscription.status}`,
     );
@@ -440,10 +440,17 @@ class SubscriptionController {
 
   // Handle subscription deactivation
   async handleSubscriptionDeactivation(user, subscription) {
-    user.subscription.status = subscription.status;
-    user.subscription.cancelAtPeriodEnd = subscription.cancel_at_period_end;
-
-    await user.save();
+    // Use findByIdAndUpdate to avoid version conflicts
+    await User.findByIdAndUpdate(
+      user._id,
+      {
+        $set: {
+          "subscription.status": subscription.status,
+          "subscription.cancelAtPeriodEnd": subscription.cancel_at_period_end || false,
+        },
+      },
+      { runValidators: false },
+    );
     console.log(
       `📝 Subscription deactivated for user ${user.email}: ${subscription.status}`,
     );
@@ -494,7 +501,7 @@ class SubscriptionController {
     try {
       const user = await User.findById(req.user.id);
 
-      if (!user || !user.subscription.stripeCustomerId) {
+      if (!user || !user.subscription?.stripeCustomerId) {
         return res.status(400).json({
           success: false,
           message: "No Stripe customer found",
@@ -511,7 +518,7 @@ class SubscriptionController {
       if (subscriptions.data.length > 0) {
         const subscription = subscriptions.data[0];
         const plan =
-          subscription.metadata?.plan || user.subscription.plan || "basic";
+          subscription.metadata?.plan || user.subscription?.plan || "basic";
         const selectedPlan = subscriptionPlans[plan];
 
         console.log(
@@ -520,7 +527,7 @@ class SubscriptionController {
         );
         console.log(`📊 Current user credits: ${user.credits}`);
         console.log(
-          `📊 Current subscription status: ${user.subscription.status}`,
+          `📊 Current subscription status: ${user.subscription?.status}`,
         );
         console.log(
           `📊 Plan: ${plan}, Credits in plan: ${selectedPlan?.credits}`,
@@ -528,80 +535,79 @@ class SubscriptionController {
 
         // Check if this is a different subscription than what we have stored
         const isNewSubscription =
-          user.subscription.stripeSubscriptionId !== subscription.id;
-        const wasInactive = user.subscription.status !== "active";
+          user.subscription?.stripeSubscriptionId !== subscription.id;
+        const wasInactive = user.subscription?.status !== "active";
         const isNowActive = subscription.status === "active";
 
-        // Update user with latest subscription info
-        user.subscription.plan = plan;
-        user.subscription.stripeSubscriptionId = subscription.id;
-        user.subscription.status = subscription.status;
+        // Calculate new credits
+        let creditsToAdd = 0;
+        const currentProcessedSessions = user.processedCheckoutSessions || [];
+        const subscriptionMarker = `sub_${subscription.id}`;
 
-        if (subscription.current_period_end) {
-          user.subscription.currentPeriodEnd = new Date(
-            subscription.current_period_end * 1000,
-          );
-          console.log(
-            `📅 Period end date: ${user.subscription.currentPeriodEnd}`,
-          );
-        } else {
-          user.subscription.currentPeriodEnd = new Date(
-            Date.now() + 30 * 24 * 60 * 60 * 1000,
-          );
-        }
-
-        user.subscription.cancelAtPeriodEnd =
-          subscription.cancel_at_period_end || false;
-
-        // Add credits if:
-        // 1. This is a new subscription (different subscription ID)
-        // 2. OR subscription just became active
-        // 3. OR user has 0 credits but active subscription (error recovery)
         if (isNewSubscription && isNowActive) {
-          // Check if we already processed this subscription via webhook
-          if (!user.processedCheckoutSessions) {
-            user.processedCheckoutSessions = [];
-          }
-
-          // Use subscription ID as a marker
-          const subscriptionMarker = `sub_${subscription.id}`;
-          if (!user.processedCheckoutSessions.includes(subscriptionMarker)) {
-            user.credits += selectedPlan.credits;
-            user.processedCheckoutSessions.push(subscriptionMarker);
+          if (!currentProcessedSessions.includes(subscriptionMarker)) {
+            creditsToAdd = selectedPlan.credits;
             console.log(
-              `✅ Added ${selectedPlan.credits} credits for new subscription ${subscription.id}`,
+              `✅ Will add ${creditsToAdd} credits for new subscription ${subscription.id}`,
             );
-            console.log(`📊 New credit balance: ${user.credits}`);
           } else {
             console.log(
               `ℹ️ Subscription ${subscription.id} already processed via webhook`,
             );
           }
         } else if (isNowActive && wasInactive) {
-          user.credits += selectedPlan.credits;
+          creditsToAdd = selectedPlan.credits;
           console.log(
-            `✅ Added ${selectedPlan.credits} credits (status changed to active)`,
+            `✅ Will add ${creditsToAdd} credits (status changed to active)`,
           );
-          console.log(`📊 New credit balance: ${user.credits}`);
         } else if (isNowActive && user.credits === 0) {
-          // Error recovery: active subscription but 0 credits
-          user.credits += selectedPlan.credits;
+          creditsToAdd = selectedPlan.credits;
           console.log(
-            `⚠️ RECOVERY: Added ${selectedPlan.credits} credits (active but had 0)`,
+            `⚠️ RECOVERY: Will add ${creditsToAdd} credits (active but had 0)`,
           );
-          console.log(`📊 New credit balance: ${user.credits}`);
         } else {
           console.log(`ℹ️ Credits not modified. Current: ${user.credits}`);
         }
 
-        await user.save();
+        // Build update object
+        const updateData = {
+          "subscription.plan": plan,
+          "subscription.stripeSubscriptionId": subscription.id,
+          "subscription.status": subscription.status,
+          "subscription.currentPeriodEnd": subscription.current_period_end
+            ? new Date(subscription.current_period_end * 1000)
+            : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          "subscription.cancelAtPeriodEnd":
+            subscription.cancel_at_period_end || false,
+        };
+
+        // Build the update operation
+        const updateOperation = { $set: updateData };
+
+        // Add credits if needed
+        if (creditsToAdd > 0) {
+          updateOperation.$inc = { credits: creditsToAdd };
+          // Add subscription marker to prevent duplicate processing
+          updateOperation.$addToSet = {
+            processedCheckoutSessions: subscriptionMarker,
+          };
+        }
+
+        // Use findByIdAndUpdate to avoid version conflicts
+        const updatedUser = await User.findByIdAndUpdate(
+          req.user.id,
+          updateOperation,
+          { new: true, runValidators: false },
+        );
+
+        console.log(`📊 New credit balance: ${updatedUser.credits}`);
 
         return res.json({
           success: true,
           message: "Subscription verified and synced",
           data: {
-            subscription: user.subscription,
-            credits: user.credits,
+            subscription: updatedUser.subscription,
+            credits: updatedUser.credits,
             plan: plan,
             planCredits: selectedPlan?.credits,
           },
