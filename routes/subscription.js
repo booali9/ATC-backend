@@ -11,172 +11,59 @@ const SubscriptionController = require("../controllers/subscriptionController");
 // Redirect route for successful payment - redirects to app deep link
 router.get("/success", (req, res) => {
   const sessionId = req.query.session_id || "";
+  const redirectUrl = req.query.redirect_url || "";
   console.log("✅ Payment success redirect, session:", sessionId);
+  console.log("🔗 Redirect URL from query:", redirectUrl);
 
-  // Send an HTML page that will redirect to the app
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Payment Successful</title>
-      <style>
-        body {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          min-height: 100vh;
-          margin: 0;
-          background: linear-gradient(135deg, #008C99 0%, #00A8B5 100%);
-          color: white;
-          text-align: center;
-          padding: 20px;
-        }
-        .container {
-          background: white;
-          border-radius: 20px;
-          padding: 40px;
-          max-width: 400px;
-          box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-        }
-        .icon {
-          width: 80px;
-          height: 80px;
-          background: #10B981;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin: 0 auto 20px;
-          font-size: 40px;
-        }
-        h1 { color: #333; margin-bottom: 10px; }
-        p { color: #666; margin-bottom: 20px; }
-        .btn {
-          background: #008C99;
-          color: white;
-          border: none;
-          padding: 15px 30px;
-          border-radius: 10px;
-          font-size: 16px;
-          font-weight: 600;
-          cursor: pointer;
-          text-decoration: none;
-          display: inline-block;
-        }
-        .loading { margin-top: 20px; color: #008C99; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="icon">✓</div>
-        <h1>Payment Successful!</h1>
-        <p>Your subscription has been activated. Redirecting you back to the app...</p>
-        <a href="atc://subscription/success?session_id=${sessionId}" class="btn">Return to App</a>
-        <p class="loading">If not redirected automatically, tap the button above.</p>
-      </div>
-      <script>
-        // Try to redirect to app immediately
-        setTimeout(function() {
-          window.location.href = "atc://subscription/success?session_id=${sessionId}";
-        }, 1000);
+  // Determine the deep link URL
+  // If redirect_url is provided, decode and use it; otherwise use default app scheme
+  let appDeepLink;
+  if (redirectUrl) {
+    try {
+      appDeepLink = decodeURIComponent(redirectUrl);
+      // Append session_id if not already in the URL
+      if (!appDeepLink.includes("session_id")) {
+        appDeepLink += `?session_id=${sessionId}&status=success`;
+      }
+    } catch (e) {
+      appDeepLink = `atc://subscription/success?session_id=${sessionId}`;
+    }
+  } else {
+    appDeepLink = `atc://subscription/success?session_id=${sessionId}`;
+  }
 
-        // Fallback: try again after 2 seconds
-        setTimeout(function() {
-          window.location.href = "atc://subscription/success?session_id=${sessionId}";
-        }, 2500);
-      </script>
-    </body>
-    </html>
-  `);
+  console.log("🚀 Redirecting to app deep link:", appDeepLink);
+
+  // ALWAYS do HTTP 302 redirect first - this is the most reliable method
+  // The browser/WebView will handle the custom scheme redirect
+  res.redirect(302, appDeepLink);
 });
 
 // Redirect route for cancelled payment - redirects to app deep link
 router.get("/cancel", (req, res) => {
+  const redirectUrl = req.query.redirect_url || "";
   console.log("❌ Payment cancelled redirect");
+  console.log("🔗 Redirect URL from query:", redirectUrl);
 
-  // Send an HTML page that will redirect to the app
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Payment Cancelled</title>
-      <style>
-        body {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          min-height: 100vh;
-          margin: 0;
-          background: linear-gradient(135deg, #008C99 0%, #00A8B5 100%);
-          color: white;
-          text-align: center;
-          padding: 20px;
-        }
-        .container {
-          background: white;
-          border-radius: 20px;
-          padding: 40px;
-          max-width: 400px;
-          box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-        }
-        .icon {
-          width: 80px;
-          height: 80px;
-          background: #EF4444;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin: 0 auto 20px;
-          font-size: 40px;
-        }
-        h1 { color: #333; margin-bottom: 10px; }
-        p { color: #666; margin-bottom: 20px; }
-        .btn {
-          background: #008C99;
-          color: white;
-          border: none;
-          padding: 15px 30px;
-          border-radius: 10px;
-          font-size: 16px;
-          font-weight: 600;
-          cursor: pointer;
-          text-decoration: none;
-          display: inline-block;
-        }
-        .loading { margin-top: 20px; color: #008C99; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="icon">✕</div>
-        <h1>Payment Cancelled</h1>
-        <p>Your payment was not completed. No charges have been made. Redirecting you back to the app...</p>
-        <a href="atc://subscription/cancel" class="btn">Return to App</a>
-        <p class="loading">If not redirected automatically, tap the button above.</p>
-      </div>
-      <script>
-        // Try to redirect to app immediately
-        setTimeout(function() {
-          window.location.href = "atc://subscription/cancel";
-        }, 1000);
+  // Determine the deep link URL
+  let appDeepLink;
+  if (redirectUrl) {
+    try {
+      appDeepLink = decodeURIComponent(redirectUrl);
+      if (!appDeepLink.includes("status")) {
+        appDeepLink += `?status=cancelled`;
+      }
+    } catch (e) {
+      appDeepLink = "atc://subscription/cancel?status=cancelled";
+    }
+  } else {
+    appDeepLink = "atc://subscription/cancel?status=cancelled";
+  }
 
-        // Fallback: try again after 2 seconds
-        setTimeout(function() {
-          window.location.href = "atc://subscription/cancel";
-        }, 2500);
-      </script>
-    </body>
-    </html>
-  `);
+  console.log("🚀 Redirecting to app deep link:", appDeepLink);
+
+  // ALWAYS do HTTP 302 redirect - this is the most reliable method
+  res.redirect(302, appDeepLink);
 });
 
 // ============================================

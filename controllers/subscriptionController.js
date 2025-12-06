@@ -6,10 +6,12 @@ class SubscriptionController {
   // Create checkout session
   async createCheckoutSession(req, res) {
     try {
-      const { plan } = req.body;
+      const { plan, successRedirectUrl, cancelRedirectUrl } = req.body;
       const userId = req.user.id;
 
       console.log("🛒 Creating checkout session for plan:", plan);
+      console.log("🔗 Success redirect URL from app:", successRedirectUrl);
+      console.log("🔗 Cancel redirect URL from app:", cancelRedirectUrl);
 
       // Validate plan
       if (!subscriptionPlans[plan]) {
@@ -68,8 +70,18 @@ class SubscriptionController {
       // This is needed because Stripe only accepts http/https URLs
       // HARDCODED to production backend URL to ensure it always works
       const backendUrl = "https://king-prawn-app-wksnq.ondigitalocean.app";
-      const successUrl = `${backendUrl}/api/subscription/success?session_id={CHECKOUT_SESSION_ID}`;
-      const cancelUrl = `${backendUrl}/api/subscription/cancel`;
+
+      // Include the app's redirect URL as a query parameter so backend can do HTTP 302 redirect
+      // This enables openAuthSessionAsync to properly return to the app
+      const encodedSuccessRedirect = successRedirectUrl
+        ? encodeURIComponent(successRedirectUrl)
+        : "";
+      const encodedCancelRedirect = cancelRedirectUrl
+        ? encodeURIComponent(cancelRedirectUrl)
+        : "";
+
+      const successUrl = `${backendUrl}/api/subscription/success?session_id={CHECKOUT_SESSION_ID}&redirect_url=${encodedSuccessRedirect}`;
+      const cancelUrl = `${backendUrl}/api/subscription/cancel?redirect_url=${encodedCancelRedirect}`;
 
       console.log("🔗 Success URL:", successUrl);
       console.log("🔗 Cancel URL:", cancelUrl);
