@@ -1,17 +1,25 @@
-const express = require('express');
-const http = require('http');
-const cors = require('cors');
-const mongoose = require('mongoose');
-require('dotenv').config();
+const express = require("express");
+const http = require("http");
+const cors = require("cors");
+const mongoose = require("mongoose");
+require("dotenv").config();
 
 const app = express();
 const server = http.createServer(app);
-const { Server } = require('socket.io');
+const { Server } = require("socket.io");
 
 const io = new Server(server, {
-  cors: { origin: ['http://localhost:3000', 'http://10.48.15.21:8081', 'http://10.48.15.21:3000', 'http://10.48.15.21:5000'], methods: ['GET', 'POST'] }
+  cors: {
+    origin: [
+      "http://localhost:3000",
+      "http://10.48.15.21:8081",
+      "http://10.48.15.21:3000",
+      "http://10.48.15.21:5000",
+    ],
+    methods: ["GET", "POST"],
+  },
 });
-app.set('io', io);
+app.set("io", io);
 
 // Middleware
 app.use(cors());
@@ -19,14 +27,15 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // MongoDB connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/authapp')
-  .then(() => console.log('✅ MongoDB connected'))
-  .catch(err => console.error('❌ MongoDB connection error:', err));
+mongoose
+  .connect(process.env.MONGODB_URI || "mongodb://localhost:27017/authapp")
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch((err) => console.error("❌ MongoDB connection error:", err));
 
 // Test route
-app.get('/', (req, res) => {
-  console.log('Received request on /');
-  res.json({ message: 'Server is running!' });
+app.get("/", (req, res) => {
+  console.log("Received request on /");
+  res.json({ message: "Server is running!" });
 });
 
 // Routes
@@ -36,28 +45,29 @@ app.use('/api/chat', require('./routes/chatRoutes'));
 app.use('/api/barter', require('./routes/barterRoutes'));
 app.use('/api/subscription', require('./routes/subscription'));
 app.use('/api/cron', require('./routes/cronRoutes'));
+app.use('/api/stream', require('./routes/streamRoutes'));
 app.use('/webhook', require('./routes/webhook'))
 
 // Socket.IO
-io.on('connection', (socket) => {
-  console.log('🔌 Client connected:', socket.id);
+io.on("connection", (socket) => {
+  console.log("🔌 Client connected:", socket.id);
 
-  socket.on('joinChat', (chatId) => {
+  socket.on("joinChat", (chatId) => {
     socket.join(chatId);
     console.log(`🟢 User joined chat room: ${chatId}`);
   });
 
-  socket.on('leaveChat', (chatId) => {
+  socket.on("leaveChat", (chatId) => {
     socket.leave(chatId);
     console.log(`🔴 User left chat room: ${chatId}`);
   });
 
   // ============ CALL EVENTS ============
-  
-  socket.on('initiateCall', (data) => {
-    console.log('📞 Call initiated:', data);
+
+  socket.on("initiateCall", (data) => {
+    console.log("📞 Call initiated:", data);
     // Broadcast to the chat room except sender
-    socket.to(data.chatId).emit('callInitiated', {
+    socket.to(data.chatId).emit("callInitiated", {
       chatId: data.chatId,
       callerId: data.callerId,
       callerName: data.callerName,
@@ -65,40 +75,40 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('acceptCall', (data) => {
-    console.log('✅ Call accepted:', data);
+  socket.on("acceptCall", (data) => {
+    console.log("✅ Call accepted:", data);
     // Notify the caller
-    socket.to(data.chatId).emit('callAccepted', {
+    socket.to(data.chatId).emit("callAccepted", {
       chatId: data.chatId,
       receiverId: data.receiverId,
     });
   });
 
-  socket.on('rejectCall', (data) => {
-    console.log('❌ Call rejected:', data);
+  socket.on("rejectCall", (data) => {
+    console.log("❌ Call rejected:", data);
     // Notify the caller
-    socket.to(data.chatId).emit('callRejected', {
+    socket.to(data.chatId).emit("callRejected", {
       chatId: data.chatId,
       receiverId: data.receiverId,
     });
   });
 
-  socket.on('endCall', (data) => {
-    console.log('📞 Call ended:', data);
+  socket.on("endCall", (data) => {
+    console.log("📞 Call ended:", data);
     // Notify all participants
-    io.to(data.chatId).emit('callEnded', {
+    io.to(data.chatId).emit("callEnded", {
       chatId: data.chatId,
     });
   });
 
-  socket.on('disconnect', () => {
-    console.log('❌ Client disconnected:', socket.id);
+  socket.on("disconnect", () => {
+    console.log("❌ Client disconnected:", socket.id);
   });
 });
 
 // Start server
 const PORT = process.env.PORT || 5000;
-const HOST = '0.0.0.0';
+const HOST = "0.0.0.0";
 server.listen(PORT, HOST, () => {
   console.log(`🚀 Server running on http://10.48.15.21:${PORT}`);
 });
