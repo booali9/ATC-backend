@@ -57,6 +57,7 @@ const userSchema = new mongoose.Schema(
       },
       stripeCustomerId: String,
       stripeSubscriptionId: String,
+      revenueCatId: String,
       status: {
         type: String,
         enum: ["active", "canceled", "past_due", "unpaid", "incomplete", null],

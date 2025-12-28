@@ -64,4 +64,9 @@ router.post(
   },
 );
 
+// RevenueCat Webhook
+router.post('/revenuecat', async (req, res) => {
+  await SubscriptionController.handleRevenueCatWebhook(req, res);
+});
+
 module.exports = router;

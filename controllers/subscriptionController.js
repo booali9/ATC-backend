@@ -84,7 +84,9 @@ class SubscriptionController {
       console.log("🔗 Success URL:", successUrl);
       console.log("🔗 Cancel URL:", cancelUrl);
 
-      // Create checkout session
+
+
+      // Create checkout session (LEGACY - STRIPE WEB)
       const session = await stripe.checkout.sessions.create({
         customer: customerId,
         payment_method_types: ["card"],
@@ -126,6 +128,59 @@ class SubscriptionController {
         message: "Error creating checkout session",
         error: error.message,
       });
+    }
+  }
+
+  async handleRevenueCatWebhook(req, res) {
+    try {
+      const { event } = req.body;
+      const { type, app_user_id, product_id, period_type } = event;
+
+      // Verify header (Simple check, ideally check signature in production)
+      const authHeader = req.headers['authorization'];
+      if (authHeader !== process.env.REVENUECAT_WEBHOOK_AUTH) {
+        console.log("❌ RevenueCat webhook unauthorized");
+        return res.status(401).send("Unauthorized");
+      }
+
+      console.log(`🔔 RevenueCat Event: ${type} for User: ${app_user_id}`);
+
+      const user = await User.findById(app_user_id);
+      if (!user) {
+        console.log("❌ User not found via RevenueCat ID (app_user_id mismatch)");
+        return res.status(404).send("User not found");
+      }
+
+      // Map RevenueCat Product ID to our internal plans
+      // ASSUMPTION: You name your RC products 'atc_basic', 'atc_standard', 'atc_premium'
+      let planKey = 'basic';
+      if (product_id.includes('standard') || product_id.includes('builder')) planKey = 'standard';
+      if (product_id.includes('premium') || product_id.includes('legacy')) planKey = 'premium';
+
+      const planDetails = subscriptionPlans[planKey];
+
+      if (type === 'INITIAL_PURCHASE' || type === 'RENEWAL') {
+        // Grant Credits
+        const creditsToAdd = planDetails.credits;
+        user.credits += creditsToAdd;
+        user.subscription.plan = planKey;
+        user.subscription.status = 'active';
+        user.subscription.revenueCatId = event.original_app_user_id;
+
+        await user.save();
+        console.log(`✅ Awarded ${creditsToAdd} credits to ${user.email}`);
+      }
+      else if (type === 'CANCELLATION' || type === 'EXPIRATION') {
+        user.subscription.status = 'canceled';
+        await user.save();
+        console.log(`ℹ️ Subscription canceled/expired for ${user.email}`);
+      }
+
+      res.sendStatus(200);
+
+    } catch (error) {
+      console.error("❌ RC Webhook Error:", error);
+      res.status(500).send("Server Error");
     }
   }
 
