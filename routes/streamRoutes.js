@@ -25,9 +25,9 @@ try {
 router.post('/token', auth, async (req, res) => {
   try {
     if (!serverClient) {
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Stream client not initialized' 
+      return res.status(500).json({
+        success: false,
+        message: 'Stream client not initialized'
       });
     }
 
@@ -41,7 +41,7 @@ router.post('/token', auth, async (req, res) => {
     await serverClient.upsertUser({
       id: userId,
       name: userName,
-      image: req.user.profileImage || null,
+      image: req.user.profileImage?.url || 'https://i.imgur.com/6VBx3io.png', // Default image if none
     });
 
     console.log(`🎫 Generated Stream token for user: ${userId}`);
@@ -54,10 +54,10 @@ router.post('/token', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error generating Stream token:', error);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: 'Failed to generate Stream token',
-      error: error.message 
+      error: error.message
     });
   }
 });
@@ -70,9 +70,9 @@ router.post('/token', auth, async (req, res) => {
 router.get('/token', auth, async (req, res) => {
   try {
     if (!serverClient) {
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Stream client not initialized' 
+      return res.status(500).json({
+        success: false,
+        message: 'Stream client not initialized'
       });
     }
 
@@ -86,7 +86,7 @@ router.get('/token', auth, async (req, res) => {
     await serverClient.upsertUser({
       id: userId,
       name: userName,
-      image: req.user.profileImage || null,
+      image: req.user.profileImage?.url || 'https://i.imgur.com/6VBx3io.png', // Default image if none
     });
 
     console.log(`🎫 Generated Stream token for user: ${userId}`);
@@ -99,10 +99,10 @@ router.get('/token', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error generating Stream token:', error);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: 'Failed to generate Stream token',
-      error: error.message 
+      error: error.message
     });
   }
 });

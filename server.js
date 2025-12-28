@@ -47,6 +47,7 @@ app.use('/api/subscription', require('./routes/subscription'));
 app.use('/api/cron', require('./routes/cronRoutes'));
 app.use('/api/stream', require('./routes/streamRoutes'));
 app.use('/webhook', require('./routes/webhook'))
+app.use('/api/config', require('./routes/configRoutes'));
 
 // Socket.IO
 io.on("connection", (socket) => {
