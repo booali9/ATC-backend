@@ -47,6 +47,7 @@ const userSchema = new mongoose.Schema(
       default: false,
     },
     friends: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    blockedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 
     // Subscription fields
     subscription: {

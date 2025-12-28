@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const Report = require('../models/Report');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cloudinary = require('../config/cloudinary');
@@ -18,11 +19,11 @@ exports.getUserById = async (req, res) => {
   try {
     const { userId } = req.params;
     const user = await User.findById(userId).select('-password');
-    
+
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
-    
+
     res.json({ success: true, user });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
@@ -143,7 +144,7 @@ exports.searchUsers = async (req, res) => {
 exports.addCredits = async (req, res) => {
   try {
     const { userId, credits, reason } = req.body;
-    
+
     if (!userId || !credits) {
       return res.status(400).json({ success: false, message: 'userId and credits are required' });
     }
@@ -156,10 +157,10 @@ exports.addCredits = async (req, res) => {
 
     console.log(`✅ Added ${credits} credits to user ${user.email}. Reason: ${reason || 'Manual adjustment'}`);
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: `Successfully added ${credits} credits`,
-      user 
+      user
     });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
@@ -229,6 +230,67 @@ exports.removePushToken = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error removing push token', error: error.message });
+  }
+};
+
+// ✅ Block User
+exports.blockUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const currentUserId = req.user._id;
+
+    if (userId === currentUserId.toString()) {
+      return res.status(400).json({ success: false, message: 'You cannot block yourself' });
+    }
+
+    await User.findByIdAndUpdate(currentUserId, {
+      $addToSet: { blockedUsers: userId }
+    });
+
+    res.json({ success: true, message: 'User blocked successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error blocking user', error: error.message });
+  }
+};
+
+// ✅ Unblock User
+exports.unblockUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const currentUserId = req.user._id;
+
+    await User.findByIdAndUpdate(currentUserId, {
+      $pull: { blockedUsers: userId }
+    });
+
+    res.json({ success: true, message: 'User unblocked successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error unblocking user', error: error.message });
+  }
+};
+
+// ✅ Report User
+exports.reportUser = async (req, res) => {
+  try {
+    const { reportedUserId, reason, description } = req.body;
+    const reporterId = req.user._id;
+
+    if (!reportedUserId || !reason) {
+      return res.status(400).json({ success: false, message: 'Reported user and reason are required' });
+    }
+
+    const report = new Report({
+      reporter: reporterId,
+      reportedUser: reportedUserId,
+      reason,
+      description
+    });
+
+    await report.save();
+
+    res.json({ success: true, message: 'Report submitted successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error submitting report', error: error.message });
   }
 };
 

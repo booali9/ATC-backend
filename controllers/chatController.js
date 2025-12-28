@@ -2,11 +2,21 @@ const Chat = require('../models/Chat');
 const User = require('../models/User');
 const Barter = require('../models/Barter');
 const cloudinary = require('../middleware/upload');
+const { containsProfanity } = require('../utils/profanityFilter');
 
 // Send text message
 exports.sendTextMessage = async (req, res) => {
   try {
     const { chatId, content } = req.body;
+
+    // 🛡️ Content Filtering (App Store Guideline 1.2)
+    if (containsProfanity(content)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Message contains inappropriate content and cannot be sent.'
+      });
+    }
+
     const chat = await Chat.findById(chatId).populate('participants');
     if (!chat) return res.status(404).json({ message: 'Chat not found' });
 
@@ -47,7 +57,7 @@ exports.sendTextMessage = async (req, res) => {
       createdAt: savedMessage.createdAt,
       chatId: chatId.toString()
     };
-    
+
     console.log('📤 Emitting newMessage to room:', chatId.toString());
     console.log('📤 Message:', fullMessage);
     io.to(chatId.toString()).emit('newMessage', fullMessage);
@@ -105,7 +115,7 @@ exports.sendMediaMessage = async (req, res) => {
       createdAt: savedMessage.createdAt,
       chatId: chatId.toString()
     };
-    
+
     console.log('📤 Emitting media newMessage to room:', chatId.toString());
     console.log('📤 Message:', fullMessage);
     io.to(chatId.toString()).emit('newMessage', fullMessage);

@@ -12,7 +12,9 @@ const {
   getActiveTrades,
   getPendingFriendRequests,
   getPendingBarters,
-  getAllFriendRequests
+  getAllFriendRequests,
+  getBarterById,
+  cancelBarter
 } = require('../controllers/barterController');
 
 // Friend request routes
@@ -32,5 +34,7 @@ router.get('/suggestions', auth, getSkillSuggestions);
 router.post('/barter', auth, proposeBarter);
 router.put('/barter/:barterId/accept', auth, acceptBarter);
 router.put('/barter/complete', auth, completeBarter);
+router.get('/:barterId', auth, getBarterById);
+router.put('/:barterId/cancel', auth, cancelBarter);
 
 module.exports = router;
