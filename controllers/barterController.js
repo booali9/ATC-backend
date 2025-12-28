@@ -443,3 +443,92 @@ exports.getPendingBarters = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 };
+
+// Get barter by ID
+exports.getBarterById = async (req, res) => {
+  try {
+    const { barterId } = req.params;
+    const userId = req.user._id;
+
+    const barter = await Barter.findById(barterId)
+      .populate('requester', 'name email profileImage rating')
+      .populate('accepter', 'name email profileImage rating');
+
+    if (!barter) {
+      return res.status(404).json({ success: false, message: 'Barter not found' });
+    }
+
+    // Check if user is part of this barter
+    if (barter.requester._id.toString() !== userId.toString() && 
+        barter.accepter._id.toString() !== userId.toString()) {
+      return res.status(403).json({ success: false, message: 'Not authorized to view this barter' });
+    }
+
+    // Determine the other user
+    const otherUser = barter.requester._id.toString() === userId.toString() 
+      ? barter.accepter 
+      : barter.requester;
+
+    res.json({ 
+      success: true, 
+      barter: {
+        _id: barter._id,
+        offered_skill: barter.offered_skill,
+        wanted_skill: barter.wanted_skill,
+        status: barter.status,
+        requester: barter.requester,
+        accepter: barter.accepter,
+        otherUser: {
+          _id: otherUser._id,
+          name: otherUser.name,
+          profileImage: otherUser.profileImage,
+          rating: otherUser.rating
+        },
+        createdAt: barter.createdAt,
+        completed_at: barter.completed_at,
+        requester_review: barter.requester_review,
+        accepter_review: barter.accepter_review
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error in getBarterById:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+// Cancel barter
+exports.cancelBarter = async (req, res) => {
+  try {
+    const { barterId } = req.params;
+    const userId = req.user._id;
+
+    const barter = await Barter.findById(barterId);
+
+    if (!barter) {
+      return res.status(404).json({ success: false, message: 'Barter not found' });
+    }
+
+    // Check if user is part of this barter
+    if (barter.requester.toString() !== userId.toString() && 
+        barter.accepter.toString() !== userId.toString()) {
+      return res.status(403).json({ success: false, message: 'Not authorized to cancel this barter' });
+    }
+
+    // Only allow canceling proposed or accepted barters
+    if (barter.status === 'completed') {
+      return res.status(400).json({ success: false, message: 'Cannot cancel a completed barter' });
+    }
+
+    if (barter.status === 'cancelled') {
+      return res.status(400).json({ success: false, message: 'Barter is already cancelled' });
+    }
+
+    barter.status = 'cancelled';
+    await barter.save();
+
+    res.json({ success: true, message: 'Barter cancelled successfully' });
+  } catch (error) {
+    console.error('❌ Error in cancelBarter:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
