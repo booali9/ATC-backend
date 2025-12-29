@@ -1,16 +1,19 @@
-const User = require('../models/User');
-const Report = require('../models/Report');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const cloudinary = require('../config/cloudinary');
+const User = require("../models/User");
+const Report = require("../models/Report");
+const Barter = require("../models/Barter");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const cloudinary = require("../config/cloudinary");
 
 // ✅ Get Profile
 exports.getProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select('-password');
+    const user = await User.findById(req.user._id).select("-password");
     res.json({ success: true, user });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    res
+      .status(500)
+      .json({ success: false, message: "Server error", error: error.message });
   }
 };
 
@@ -18,15 +21,19 @@ exports.getProfile = async (req, res) => {
 exports.getUserById = async (req, res) => {
   try {
     const { userId } = req.params;
-    const user = await User.findById(userId).select('-password');
+    const user = await User.findById(userId).select("-password");
 
     if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
 
     res.json({ success: true, user });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    res
+      .status(500)
+      .json({ success: false, message: "Server error", error: error.message });
   }
 };
 
@@ -39,9 +46,9 @@ exports.editProfile = async (req, res) => {
     // If file is sent in multipart/form-data
     if (req.file) {
       const result = await cloudinary.uploader.upload(req.file.path, {
-        folder: 'profile_images',
+        folder: "profile_images",
         width: 500,
-        crop: 'scale',
+        crop: "scale",
       });
       profileImage = {
         public_id: result.public_id,
@@ -53,18 +60,27 @@ exports.editProfile = async (req, res) => {
     const updates = {};
     if (name) updates.name = name;
     if (phone) updates.phone = phone;
-    if (skills) updates.skills_offered = Array.isArray(skills) ? skills : [skills];
+    if (skills)
+      updates.skills_offered = Array.isArray(skills) ? skills : [skills];
     if (serviceSeeking) updates.skills_wanted = serviceSeeking;
     if (profileImage) updates.profileImage = profileImage;
 
     const updatedUser = await User.findByIdAndUpdate(req.user._id, updates, {
       new: true,
       runValidators: true,
-    }).select('-password');
+    }).select("-password");
 
-    res.json({ success: true, message: 'Profile updated successfully', user: updatedUser });
+    res.json({
+      success: true,
+      message: "Profile updated successfully",
+      user: updatedUser,
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error updating profile', error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error updating profile",
+      error: error.message,
+    });
   }
 };
 
@@ -74,22 +90,31 @@ exports.changePassword = async (req, res) => {
     const { oldPassword, newPassword } = req.body;
 
     if (!oldPassword || !newPassword) {
-      return res.status(400).json({ success: false, message: 'Please provide both old and new passwords' });
+      return res.status(400).json({
+        success: false,
+        message: "Please provide both old and new passwords",
+      });
     }
 
     const user = await User.findById(req.user._id);
     const isMatch = await bcrypt.compare(oldPassword, user.password);
 
     if (!isMatch) {
-      return res.status(400).json({ success: false, message: 'Old password is incorrect' });
+      return res
+        .status(400)
+        .json({ success: false, message: "Old password is incorrect" });
     }
 
     user.password = await bcrypt.hash(newPassword, 12);
     await user.save();
 
-    res.json({ success: true, message: 'Password changed successfully' });
+    res.json({ success: true, message: "Password changed successfully" });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error changing password', error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error changing password",
+      error: error.message,
+    });
   }
 };
 
@@ -97,11 +122,18 @@ exports.changePassword = async (req, res) => {
 exports.logout = async (req, res) => {
   try {
     // Option 1: Client removes token on logout (stateless JWT)
-    res.json({ success: true, message: 'Logged out successfully (remove token on client side)' });
+    res.json({
+      success: true,
+      message: "Logged out successfully (remove token on client side)",
+    });
 
     // Option 2 (Optional): If you use a token blacklist, you can store it in DB or cache
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error logging out', error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error logging out",
+      error: error.message,
+    });
   }
 };
 
@@ -109,9 +141,13 @@ exports.logout = async (req, res) => {
 exports.deleteAccount = async (req, res) => {
   try {
     await User.findByIdAndDelete(req.user._id);
-    res.json({ success: true, message: 'Account deleted successfully' });
+    res.json({ success: true, message: "Account deleted successfully" });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error deleting account', error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error deleting account",
+      error: error.message,
+    });
   }
 };
 
@@ -129,14 +165,54 @@ exports.searchUsers = async (req, res) => {
     const users = await User.find({
       _id: { $ne: currentUserId },
       $or: [
-        { name: { $regex: query, $options: 'i' } },
-        { email: { $regex: query, $options: 'i' } }
-      ]
-    }).select('_id name email profileImage skills_offered skills_wanted rating').limit(20);
+        { name: { $regex: query, $options: "i" } },
+        { email: { $regex: query, $options: "i" } },
+      ],
+    })
+      .select("_id name email profileImage skills_offered skills_wanted")
+      .limit(20);
 
-    res.json({ success: true, users });
+    // Calculate rating for each user
+    const usersWithRatings = await Promise.all(
+      users.map(async (user) => {
+        const completedBarters = await Barter.find({
+          status: "completed",
+          $or: [{ requester: user._id }, { accepter: user._id }],
+        });
+
+        let totalRating = 0;
+        let reviewCount = 0;
+
+        completedBarters.forEach((barter) => {
+          let review = null;
+          if (barter.requester.toString() === user._id.toString()) {
+            review = barter.accepter_review;
+          } else {
+            review = barter.requester_review;
+          }
+
+          if (review && review.rating) {
+            totalRating += review.rating;
+            reviewCount++;
+          }
+        });
+
+        const averageRating = reviewCount > 0 ? totalRating / reviewCount : 0;
+
+        return {
+          ...user.toObject(),
+          rating: averageRating,
+        };
+      }),
+    );
+
+    res.json({ success: true, users: usersWithRatings });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error searching users', error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error searching users",
+      error: error.message,
+    });
   }
 };
 
@@ -146,24 +222,30 @@ exports.addCredits = async (req, res) => {
     const { userId, credits, reason } = req.body;
 
     if (!userId || !credits) {
-      return res.status(400).json({ success: false, message: 'userId and credits are required' });
+      return res
+        .status(400)
+        .json({ success: false, message: "userId and credits are required" });
     }
 
     const user = await User.findByIdAndUpdate(
       userId,
       { $inc: { credits: credits } },
-      { new: true }
-    ).select('-password');
+      { new: true },
+    ).select("-password");
 
-    console.log(`✅ Added ${credits} credits to user ${user.email}. Reason: ${reason || 'Manual adjustment'}`);
+    console.log(
+      `✅ Added ${credits} credits to user ${user.email}. Reason: ${reason || "Manual adjustment"}`,
+    );
 
     res.json({
       success: true,
       message: `Successfully added ${credits} credits`,
-      user
+      user,
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    res
+      .status(500)
+      .json({ success: false, message: "Server error", error: error.message });
   }
 };
 
@@ -173,23 +255,29 @@ exports.savePushToken = async (req, res) => {
     const { expoPushToken } = req.body;
 
     if (!expoPushToken) {
-      return res.status(400).json({ success: false, message: 'Push token is required' });
+      return res
+        .status(400)
+        .json({ success: false, message: "Push token is required" });
     }
 
     const user = await User.findByIdAndUpdate(
       req.user._id,
       { expoPushToken: expoPushToken },
-      { new: true }
-    ).select('-password');
+      { new: true },
+    ).select("-password");
 
     console.log(`✅ Push token saved for user ${user.email}`);
 
     res.json({
       success: true,
-      message: 'Push token saved successfully',
+      message: "Push token saved successfully",
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error saving push token', error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error saving push token",
+      error: error.message,
+    });
   }
 };
 
@@ -199,23 +287,31 @@ exports.updateNotificationPreferences = async (req, res) => {
     const { email, push, subscriptionReminders } = req.body;
 
     const updates = {};
-    if (typeof email === 'boolean') updates['notificationPreferences.email'] = email;
-    if (typeof push === 'boolean') updates['notificationPreferences.push'] = push;
-    if (typeof subscriptionReminders === 'boolean') updates['notificationPreferences.subscriptionReminders'] = subscriptionReminders;
+    if (typeof email === "boolean")
+      updates["notificationPreferences.email"] = email;
+    if (typeof push === "boolean")
+      updates["notificationPreferences.push"] = push;
+    if (typeof subscriptionReminders === "boolean")
+      updates["notificationPreferences.subscriptionReminders"] =
+        subscriptionReminders;
 
     const user = await User.findByIdAndUpdate(
       req.user._id,
       { $set: updates },
-      { new: true }
-    ).select('-password');
+      { new: true },
+    ).select("-password");
 
     res.json({
       success: true,
-      message: 'Notification preferences updated',
+      message: "Notification preferences updated",
       notificationPreferences: user.notificationPreferences,
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error updating preferences', error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error updating preferences",
+      error: error.message,
+    });
   }
 };
 
@@ -226,10 +322,14 @@ exports.removePushToken = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Push token removed successfully',
+      message: "Push token removed successfully",
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error removing push token', error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error removing push token",
+      error: error.message,
+    });
   }
 };
 
@@ -240,16 +340,22 @@ exports.blockUser = async (req, res) => {
     const currentUserId = req.user._id;
 
     if (userId === currentUserId.toString()) {
-      return res.status(400).json({ success: false, message: 'You cannot block yourself' });
+      return res
+        .status(400)
+        .json({ success: false, message: "You cannot block yourself" });
     }
 
     await User.findByIdAndUpdate(currentUserId, {
-      $addToSet: { blockedUsers: userId }
+      $addToSet: { blockedUsers: userId },
     });
 
-    res.json({ success: true, message: 'User blocked successfully' });
+    res.json({ success: true, message: "User blocked successfully" });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error blocking user', error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error blocking user",
+      error: error.message,
+    });
   }
 };
 
@@ -260,12 +366,16 @@ exports.unblockUser = async (req, res) => {
     const currentUserId = req.user._id;
 
     await User.findByIdAndUpdate(currentUserId, {
-      $pull: { blockedUsers: userId }
+      $pull: { blockedUsers: userId },
     });
 
-    res.json({ success: true, message: 'User unblocked successfully' });
+    res.json({ success: true, message: "User unblocked successfully" });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error unblocking user', error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error unblocking user",
+      error: error.message,
+    });
   }
 };
 
@@ -276,21 +386,27 @@ exports.reportUser = async (req, res) => {
     const reporterId = req.user._id;
 
     if (!reportedUserId || !reason) {
-      return res.status(400).json({ success: false, message: 'Reported user and reason are required' });
+      return res.status(400).json({
+        success: false,
+        message: "Reported user and reason are required",
+      });
     }
 
     const report = new Report({
       reporter: reporterId,
       reportedUser: reportedUserId,
       reason,
-      description
+      description,
     });
 
     await report.save();
 
-    res.json({ success: true, message: 'Report submitted successfully' });
+    res.json({ success: true, message: "Report submitted successfully" });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error submitting report', error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error submitting report",
+      error: error.message,
+    });
   }
 };
-
