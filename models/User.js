@@ -59,6 +59,12 @@ const userSchema = new mongoose.Schema(
       stripeCustomerId: String,
       stripeSubscriptionId: String,
       revenueCatId: String,
+      platform: {
+        type: String,
+        enum: ["ios", "android", "stripe", null],
+        default: null,
+      },
+      productId: String, // App Store/Play Store product ID
       status: {
         type: String,
         enum: ["active", "canceled", "past_due", "unpaid", "incomplete", null],
@@ -85,6 +91,13 @@ const userSchema = new mongoose.Schema(
 
     // Track processed checkout sessions to prevent duplicate credit additions
     processedCheckoutSessions: [
+      {
+        type: String,
+      },
+    ],
+
+    // Track processed native transactions (iOS/Android) to prevent duplicate credit additions
+    processedTransactions: [
       {
         type: String,
       },
