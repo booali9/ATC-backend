@@ -152,10 +152,10 @@ class SubscriptionController {
       }
 
       // Map RevenueCat Product ID to our internal plans
-      // ASSUMPTION: You name your RC products 'atc_basic', 'atc_standard', 'atc_premium'
       let planKey = 'basic';
-      if (product_id.includes('standard') || product_id.includes('builder')) planKey = 'standard';
-      if (product_id.includes('premium') || product_id.includes('legacy')) planKey = 'premium';
+      if (product_id.includes('legacy')) planKey = 'standard';
+      if (product_id.includes('supporter')) planKey = 'premium';
+      // Builder is default 'basic' ($1)
 
       const planDetails = subscriptionPlans[planKey];
 
@@ -842,11 +842,12 @@ class SubscriptionController {
 
       // Map product ID to our internal plan
       let planKey = 'basic';
-      if (productId.includes('builder') || productId.includes('standard')) {
+      if (productId.includes('legacy')) {
         planKey = 'standard';
-      } else if (productId.includes('legacy') || productId.includes('premium')) {
+      } else if (productId.includes('supporter')) {
         planKey = 'premium';
       }
+      // builder stays basic
 
       const selectedPlan = subscriptionPlans[planKey];
       if (!selectedPlan) {
@@ -873,7 +874,7 @@ class SubscriptionController {
 
       // Verify the receipt with Apple/Google
       let isValidReceipt = false;
-      
+
       if (platform === 'ios') {
         isValidReceipt = await this.verifyAppleReceipt(receipt, productId);
       } else if (platform === 'android') {
@@ -940,7 +941,7 @@ class SubscriptionController {
     try {
       // For production, use: https://buy.itunes.apple.com/verifyReceipt
       // For sandbox, use: https://sandbox.itunes.apple.com/verifyReceipt
-      const verifyUrl = process.env.NODE_ENV === 'production' 
+      const verifyUrl = process.env.NODE_ENV === 'production'
         ? 'https://buy.itunes.apple.com/verifyReceipt'
         : 'https://sandbox.itunes.apple.com/verifyReceipt';
 
@@ -957,14 +958,14 @@ class SubscriptionController {
       });
 
       const result = await response.json();
-      
+
       if (result.status === 0) {
         // Receipt is valid, check if it contains our product
         const inAppPurchases = result.receipt?.in_app || [];
-        const matchingPurchase = inAppPurchases.find(purchase => 
+        const matchingPurchase = inAppPurchases.find(purchase =>
           purchase.product_id === productId
         );
-        
+
         if (matchingPurchase) {
           console.log('✅ Apple receipt verified successfully');
           return true;
@@ -1002,19 +1003,19 @@ class SubscriptionController {
       });
 
       const result = await response.json();
-      
+
       if (result.status === 0) {
         const inAppPurchases = result.receipt?.in_app || [];
-        const matchingPurchase = inAppPurchases.find(purchase => 
+        const matchingPurchase = inAppPurchases.find(purchase =>
           purchase.product_id === productId
         );
-        
+
         if (matchingPurchase) {
           console.log('✅ Apple sandbox receipt verified successfully');
           return true;
         }
       }
-      
+
       console.log('❌ Apple sandbox receipt verification failed:', result.status);
       return false;
     } catch (error) {
@@ -1028,37 +1029,37 @@ class SubscriptionController {
     try {
       // For Google Play, receiptData contains the purchase token
       const purchaseToken = receiptData;
-      
+
       // In production, you should verify with Google Play Developer API
       // For now, we'll do comprehensive validation
-      
+
       if (!purchaseToken || typeof purchaseToken !== 'string') {
         console.log('❌ Invalid Google Play purchase token format');
         return false;
       }
-      
+
       // Basic validation - purchase tokens are typically long base64-encoded strings
       if (purchaseToken.length < 50) {
         console.log('❌ Google Play purchase token too short');
         return false;
       }
-      
+
       // Check if it looks like a valid purchase token (base64-like characters)
       const base64Regex = /^[A-Za-z0-9+/=._-]+$/;
       if (!base64Regex.test(purchaseToken)) {
         console.log('❌ Google Play purchase token invalid format');
         return false;
       }
-      
+
       // TODO: In production, implement proper Google Play Developer API verification
       // This would involve:
       // 1. Using Google Play Developer API with service account
       // 2. Calling purchases.subscriptions.get or purchases.products.get
       // 3. Verifying the purchase state and other details
-      
+
       console.log('✅ Google Play receipt basic validation passed');
       console.log('ℹ️ Note: Implement full Google Play API verification for production');
-      
+
       return true;
     } catch (error) {
       console.error('❌ Google Play receipt verification error:', error);
@@ -1071,7 +1072,7 @@ class SubscriptionController {
     try {
       // This is how you would implement full Google Play verification
       // You need to set up Google Play Developer API credentials
-      
+
       // Check if googleapis is available
       let google;
       try {
@@ -1080,24 +1081,24 @@ class SubscriptionController {
         console.log('ℹ️ googleapis not installed, falling back to basic verification');
         return await this.verifyGoogleReceipt(purchaseToken, productId);
       }
-      
+
       // Load service account credentials
       const auth = new google.auth.GoogleAuth({
         keyFile: process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE, // Path to service account JSON
         scopes: ['https://www.googleapis.com/auth/androidpublisher'],
       });
-      
+
       const androidpublisher = google.androidpublisher({ version: 'v3', auth });
-      
+
       // Verify subscription purchase
       const response = await androidpublisher.purchases.subscriptions.get({
         packageName: packageName || process.env.ANDROID_PACKAGE_NAME,
         subscriptionId: productId,
         token: purchaseToken,
       });
-      
+
       const purchase = response.data;
-      
+
       // Check if purchase is valid and active
       if (purchase.paymentState === 1 && purchase.purchaseState === 0) {
         console.log('✅ Google Play API verification successful');
@@ -1106,7 +1107,7 @@ class SubscriptionController {
         console.log('❌ Google Play purchase not valid:', purchase);
         return false;
       }
-      
+
     } catch (error) {
       console.error('❌ Google Play API verification error:', error);
       // Fallback to basic verification if API fails
