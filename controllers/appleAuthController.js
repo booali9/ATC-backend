@@ -72,6 +72,17 @@ const appleSignIn = async (req, res) => {
       console.log('🔐 Verifying with clientId:', APPLE_CONFIG.clientId);
       console.log('🔐 Nonce received:', nonce ? 'yes' : 'no');
       
+      // Decode token WITHOUT verification first to see the actual audience
+      const tokenParts = identityToken.split('.');
+      if (tokenParts.length === 3) {
+        const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
+        console.log('🔍 Token payload - iss:', payload.iss);
+        console.log('🔍 Token payload - aud:', payload.aud);
+        console.log('🔍 Token payload - sub:', payload.sub);
+        console.log('🔍 Expected audience:', APPLE_CONFIG.clientId);
+        console.log('🔍 Audience match:', payload.aud === APPLE_CONFIG.clientId);
+      }
+      
       // First try without nonce verification (for debugging)
       verifiedToken = await appleSignin.verifyIdToken(identityToken, {
         audience: APPLE_CONFIG.clientId,
