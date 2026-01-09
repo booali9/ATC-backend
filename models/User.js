@@ -112,6 +112,23 @@ const userSchema = new mongoose.Schema(
       expiresAt: Date,
     },
 
+    // OAuth provider fields
+    appleUserId: {
+      type: String,
+      unique: true,
+      sparse: true, // Allows multiple null values
+    },
+    googleUserId: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
+    authProvider: {
+      type: String,
+      enum: ['email', 'apple', 'google', 'facebook', null],
+      default: 'email',
+    },
+
     // Push notification token
     expoPushToken: {
       type: String,

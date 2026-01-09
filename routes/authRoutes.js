@@ -11,6 +11,12 @@ const {
   getProfile
 } = require('../controllers/authController');
 
+const {
+  appleSignIn,
+  verifyAppleAuthCode,
+  revokeAppleToken
+} = require('../controllers/appleAuthController');
+
 const auth = require('../middleware/auth');
 const upload = require('../middleware/upload');
 
@@ -21,6 +27,12 @@ router.post('/login', login);
 router.post('/oauth-login', oauthLogin);
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
+
+// Apple Sign In routes
+router.post('/apple-signin', appleSignIn);
+router.post('/apple-verify-code', verifyAppleAuthCode);
+router.post('/apple-revoke', auth, revokeAppleToken);
+
 router.post('/complete-profile', auth, upload.single('profileImage'), completeProfile);
 // Protected routes
 
