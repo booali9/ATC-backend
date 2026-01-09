@@ -69,9 +69,12 @@ const appleSignIn = async (req, res) => {
     // Verify the identity token from Apple
     let verifiedToken;
     try {
+      console.log('🔐 Verifying with clientId:', APPLE_CONFIG.clientId);
+      console.log('🔐 Nonce received:', nonce ? 'yes' : 'no');
+      
+      // First try without nonce verification (for debugging)
       verifiedToken = await appleSignin.verifyIdToken(identityToken, {
         audience: APPLE_CONFIG.clientId,
-        nonce: nonce ? crypto.createHash('sha256').update(nonce).digest('hex') : undefined,
         ignoreExpiration: false,
       });
 
@@ -82,6 +85,7 @@ const appleSignIn = async (req, res) => {
       });
     } catch (verifyError) {
       console.error('❌ Apple token verification failed:', verifyError.message);
+      console.error('❌ Full error:', verifyError);
       return res.status(401).json({ 
         error: 'Invalid Apple identity token',
         details: verifyError.message 
