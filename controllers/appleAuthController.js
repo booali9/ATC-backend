@@ -12,6 +12,12 @@ const APPLE_CONFIG = {
   privateKey: process.env.APPLE_PRIVATE_KEY,
 };
 
+// Valid audiences - includes Expo Go for development testing
+const VALID_AUDIENCES = [
+  'com.booali.Atc',           // Your production bundle ID
+  'host.exp.Exponent',        // Expo Go (for development testing)
+];
+
 // Generate JWT Token for our app
 const generateToken = (userId) => {
   return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '30d' });
@@ -69,23 +75,29 @@ const appleSignIn = async (req, res) => {
     // Verify the identity token from Apple
     let verifiedToken;
     try {
-      console.log('🔐 Verifying with clientId:', APPLE_CONFIG.clientId);
       console.log('🔐 Nonce received:', nonce ? 'yes' : 'no');
       
       // Decode token WITHOUT verification first to see the actual audience
       const tokenParts = identityToken.split('.');
+      let tokenAudience = null;
       if (tokenParts.length === 3) {
         const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
+        tokenAudience = payload.aud;
         console.log('🔍 Token payload - iss:', payload.iss);
         console.log('🔍 Token payload - aud:', payload.aud);
         console.log('🔍 Token payload - sub:', payload.sub);
-        console.log('🔍 Expected audience:', APPLE_CONFIG.clientId);
-        console.log('🔍 Audience match:', payload.aud === APPLE_CONFIG.clientId);
+        console.log('🔍 Valid audiences:', VALID_AUDIENCES);
+        console.log('🔍 Audience is valid:', VALID_AUDIENCES.includes(payload.aud));
       }
       
-      // First try without nonce verification (for debugging)
+      // Check if audience is in our allowed list
+      if (!tokenAudience || !VALID_AUDIENCES.includes(tokenAudience)) {
+        throw new Error(`Invalid audience: ${tokenAudience}. Expected one of: ${VALID_AUDIENCES.join(', ')}`);
+      }
+      
+      // Verify with the actual audience from the token
       verifiedToken = await appleSignin.verifyIdToken(identityToken, {
-        audience: APPLE_CONFIG.clientId,
+        audience: tokenAudience, // Use the actual audience from token
         ignoreExpiration: false,
       });
 
@@ -93,6 +105,7 @@ const appleSignIn = async (req, res) => {
         sub: verifiedToken.sub,
         email: verifiedToken.email,
         email_verified: verifiedToken.email_verified,
+        audience: tokenAudience,
       });
     } catch (verifyError) {
       console.error('❌ Apple token verification failed:', verifyError.message);
