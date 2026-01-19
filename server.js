@@ -109,7 +109,8 @@ io.on("connection", (socket) => {
 
 // Start server
 const PORT = process.env.PORT || 5000;
-const HOST = "0.0.0.0";
-server.listen(PORT, HOST, () => {
-  console.log(`🚀 Server running on http://10.48.15.21:${PORT}`);
+server.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔗 MongoDB: ${process.env.MONGODB_URI ? 'Connected' : 'Not configured'}`);
 });
