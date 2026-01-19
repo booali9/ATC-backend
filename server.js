@@ -35,7 +35,29 @@ mongoose
 // Test route
 app.get("/", (req, res) => {
   console.log("Received request on /");
-  res.json({ message: "Server is running!" });
+  res.json({ 
+    message: "Server is running!",
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    mongodb: process.env.MONGODB_URI ? 'configured' : 'not configured',
+    routes: [
+      'GET /',
+      'POST /api/auth/register',
+      'POST /api/auth/login',
+      'POST /api/auth/oauth-login',
+      'GET /api/user/profile',
+      'POST /api/user/logout'
+    ]
+  });
+});
+
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.json({ 
+    status: "healthy",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
 });
 
 // Routes
