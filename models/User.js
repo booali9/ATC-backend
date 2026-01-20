@@ -141,6 +141,14 @@ const userSchema = new mongoose.Schema(
       push: { type: Boolean, default: true },
       subscriptionReminders: { type: Boolean, default: true },
     },
+
+    // Referral code (optional, unique when present)
+    referralCode: {
+      type: String,
+      unique: true,
+      sparse: true, // Allows multiple null values
+      default: null,
+    },
   },
   {
     timestamps: true,

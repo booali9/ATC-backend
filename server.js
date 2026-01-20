@@ -26,29 +26,58 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// MongoDB connection with better error handling and timeout settings
-mongoose
-  .connect(process.env.MONGODB_URI || "mongodb://localhost:27017/authapp", {
-    serverSelectionTimeoutMS: 30000, // 30 seconds
-    socketTimeoutMS: 45000, // 45 seconds
-    bufferMaxEntries: 0,
-    maxPoolSize: 10,
-    minPoolSize: 5,
-  })
-  .then(() => console.log("✅ MongoDB connected"))
-  .catch((err) => {
-    console.error("❌ MongoDB connection error:", err);
+// MongoDB connection with retry logic
+const connectDB = async () => {
+  try {
+    const conn = await mongoose.connect(process.env.MONGODB_URI || "mongodb://localhost:27017/authapp");
+    console.log("✅ MongoDB connected:", conn.connection.host);
+    
+    // Fix referralCode index issue
+    try {
+      const User = require('./models/User');
+      await User.collection.dropIndex('referralCode_1');
+      console.log("✅ Dropped old referralCode index");
+    } catch (indexError) {
+      // Index might not exist, which is fine
+      console.log("ℹ️ No old referralCode index to drop");
+    }
+    
+  } catch (error) {
+    console.error("❌ MongoDB connection error:", error.message);
     console.error("❌ MongoDB URI:", process.env.MONGODB_URI ? 'configured' : 'not configured');
-  });
+    // Don't exit process in serverless environment
+    if (process.env.NODE_ENV !== 'production') {
+      process.exit(1);
+    }
+  }
+};
+
+// Connect to MongoDB
+connectDB();
 
 // Test route
 app.get("/", (req, res) => {
   console.log("Received request on /");
+  
+  // Check MongoDB connection status
+  const mongoStatus = mongoose.connection.readyState;
+  const mongoStatusText = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting'
+  }[mongoStatus] || 'unknown';
+  
   res.json({ 
     message: "Server is running!",
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    mongodb: process.env.MONGODB_URI ? 'configured' : 'not configured',
+    mongodb: {
+      uri: process.env.MONGODB_URI ? 'configured' : 'not configured',
+      status: mongoStatusText,
+      readyState: mongoStatus,
+      host: mongoose.connection.host || 'not connected'
+    },
     jwtSecret: process.env.JWT_SECRET ? 'configured' : 'NOT CONFIGURED',
     routes: [
       'GET /',

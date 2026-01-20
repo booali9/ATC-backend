@@ -121,7 +121,21 @@ const appleSignIn = async (req, res) => {
     
     // Email from token (most reliable) or from request
     const userEmail = verifiedToken.email || email;
-    const userName = fullName || 'Apple User';
+    
+    // Handle fullName properly - it can be an object or null
+    let userName = 'Apple User'; // Default name
+    if (fullName && typeof fullName === 'object') {
+      // Extract name from fullName object
+      const firstName = fullName.givenName || '';
+      const lastName = fullName.familyName || '';
+      if (firstName || lastName) {
+        userName = `${firstName} ${lastName}`.trim();
+      }
+    } else if (typeof fullName === 'string' && fullName) {
+      userName = fullName;
+    }
+    
+    console.log('🍎 Processed user name:', userName);
 
     if (!userEmail) {
       // This can happen if user has hidden their email and this isn't the first sign-in
@@ -173,8 +187,9 @@ const appleSignIn = async (req, res) => {
 
     // Generate JWT token
     const token = generateToken(user._id);
-
+    
     console.log(`✅ Apple Sign In successful for ${user.email}`);
+    console.log(`🔐 Generated token for user ID: ${user._id}`);
 
     res.status(200).json({
       message: isNewUser ? 'Account created successfully' : 'Login successful',
