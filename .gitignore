@@ -3,5 +3,9 @@ node_modules/
 *.log
 .vercel
 dist
+<<<<<<< HEAD
 config/service-account.json
 .vercel
+=======
+config/service-account.json
+>>>>>>> 5eea7fcbf2f1a10cd0fc958b002c17bc06aeeecf
