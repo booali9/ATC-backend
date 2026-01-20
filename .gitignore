@@ -1,0 +1,7 @@
+
+node_modules/
+*.log
+.vercel
+dist
+config/service-account.json
+.vercel
