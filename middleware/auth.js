@@ -21,12 +21,55 @@ const auth = async (req, res, next) => {
     console.log('🔐 Auth middleware - Token decoded successfully');
     console.log('🔐 Auth middleware - Decoded payload:', JSON.stringify(decoded, null, 2));
     console.log('🔐 Auth middleware - Looking for userId:', decoded.userId);
+    console.log('🔐 Auth middleware - UserId type:', typeof decoded.userId);
     
-    const user = await User.findById(decoded.userId).select('-password');
+    // Ensure userId is properly formatted for MongoDB lookup
+    let userId = decoded.userId;
+    if (typeof userId === 'string' && userId.length === 24) {
+      // Looks like a valid ObjectId string
+      console.log('🔐 Auth middleware - Using userId as ObjectId string');
+    } else {
+      console.log('🔐 Auth middleware - Invalid userId format:', userId);
+    }
+    
+    const user = await User.findById(userId).select('-password');
+    console.log('🔐 Auth middleware - Database query for userId:', userId);
+    console.log('🔐 Auth middleware - User found:', user ? 'yes' : 'NO');
+    
+    if (!user) {
+      // Try alternative lookup methods
+      console.log('❌ Auth middleware - Trying alternative user lookup...');
+      
+      try {
+        // Try finding by string conversion
+        const userByString = await User.findOne({ _id: userId }).select('-password');
+        console.log('❌ Auth middleware - User found by string lookup:', userByString ? 'yes' : 'no');
+        
+        if (userByString) {
+          console.log('✅ Auth middleware - Found user with alternative lookup');
+          req.user = userByString;
+          return next();
+        }
+      } catch (altError) {
+        console.log('❌ Auth middleware - Alternative lookup failed:', altError.message);
+      }
+    }
     
     if (!user) {
       console.log('❌ Auth middleware - User not found for userId:', decoded.userId);
       console.log('❌ Auth middleware - User search result:', user);
+      
+      // Try to find user with different query to debug
+      try {
+        const userCount = await User.countDocuments();
+        console.log('❌ Auth middleware - Total users in database:', userCount);
+        
+        const recentUsers = await User.find().sort({ createdAt: -1 }).limit(5).select('_id email createdAt');
+        console.log('❌ Auth middleware - Recent users:', recentUsers.map(u => ({ id: u._id.toString(), email: u.email, created: u.createdAt })));
+      } catch (debugError) {
+        console.log('❌ Auth middleware - Debug query failed:', debugError.message);
+      }
+      
       return res.status(401).json({ error: 'Token is not valid' });
     }
 
