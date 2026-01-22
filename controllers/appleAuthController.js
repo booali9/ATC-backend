@@ -190,6 +190,18 @@ const appleSignIn = async (req, res) => {
     
     console.log(`✅ Apple Sign In successful for ${user.email}`);
     console.log(`🔐 Generated token for user ID: ${user._id}`);
+    console.log(`🔐 Generated token length: ${token.length}`);
+    console.log(`🔐 Generated token preview: ${token.substring(0, 50)}...`);
+    console.log(`🔐 JWT_SECRET configured: ${process.env.JWT_SECRET ? 'yes' : 'NO'}`);
+    console.log(`🔐 JWT_SECRET length: ${process.env.JWT_SECRET ? process.env.JWT_SECRET.length : 0}`);
+
+    // Test token verification immediately
+    try {
+      const testDecoded = jwt.verify(token, process.env.JWT_SECRET);
+      console.log(`✅ Token verification test passed:`, testDecoded);
+    } catch (testError) {
+      console.log(`❌ Token verification test failed:`, testError.message);
+    }
 
     res.status(200).json({
       message: isNewUser ? 'Account created successfully' : 'Login successful',
