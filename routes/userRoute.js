@@ -24,7 +24,7 @@ router.get('/profile', auth, getProfile);
 router.get('/profile/:userId', auth, getUserById);
 router.put('/edit-profile', auth, upload.single('profileImage'), editProfile); // accept single file
 router.put('/change-password', auth, changePassword);
-router.post('/logout', auth, logout);
+router.post('/logout', logout); // No auth required - stateless JWT, just returns success
 router.delete('/delete-account', auth, deleteAccount);
 
 // Search routes

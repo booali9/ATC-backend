@@ -17,14 +17,20 @@ const userSchema = new mongoose.Schema(
     },
     phone: {
       type: String,
-      required: true,
+      required: false, // Optional for OAuth users
       unique: true,
+      sparse: true, // Allows multiple null values
       trim: true,
     },
     password: {
       type: String,
-      required: true,
+      required: false, // Optional for OAuth users
       minlength: 6,
+    },
+    clerkId: {
+      type: String,
+      unique: true,
+      sparse: true, // Allows multiple null values for non-Clerk users
     },
     profileImage: {
       public_id: String,
@@ -125,7 +131,7 @@ const userSchema = new mongoose.Schema(
     },
     authProvider: {
       type: String,
-      enum: ['email', 'apple', 'google', 'facebook', null],
+      enum: ['email', 'apple', 'google', 'facebook', 'oauth', 'oauth_google', 'oauth_apple', 'oauth_facebook', null],
       default: 'email',
     },
 
@@ -156,7 +162,8 @@ const userSchema = new mongoose.Schema(
 );
 
 userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
+  // Only hash password if it exists and was modified
+  if (!this.password || !this.isModified("password")) return next();
   this.password = await bcrypt.hash(this.password, 12);
   next();
 });

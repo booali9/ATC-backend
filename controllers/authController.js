@@ -301,40 +301,116 @@ const getProfile = async (req, res) => {
 };
 
 // OAuth Login - For users authenticated via OAuth providers (Google, Apple, Facebook)
-// These users are already verified by the provider, so we just need to find them and issue a token
+// These users are already verified by the provider
+// If user doesn't exist, create them automatically
 const oauthLogin = async (req, res) => {
   try {
-    const { email, clerkId, provider } = req.body;
+    const { email, clerkId, provider, name } = req.body;
+
+    console.log(`🔄 OAuth login request:`, { email, clerkId, provider, name: name ? 'provided' : 'missing' });
 
     if (!email) {
       return res.status(400).json({ error: 'Email is required' });
     }
 
-    // Find user by email
-    const user = await User.findOne({ email });
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found. Please sign up first.' });
+    // Normalize provider name to match enum
+    let normalizedProvider = 'oauth';
+    if (provider) {
+      if (provider.includes('google')) normalizedProvider = 'google';
+      else if (provider.includes('apple')) normalizedProvider = 'apple';
+      else if (provider.includes('facebook')) normalizedProvider = 'facebook';
+      else normalizedProvider = 'oauth';
     }
 
-    // For OAuth users, we trust the provider's verification
-    // Mark as verified if not already
-    if (!user.isVerified) {
-      user.isVerified = true;
-      await user.save();
+    // Try to find user by email or clerkId
+    let user = await User.findOne({ 
+      $or: [
+        { email: email.toLowerCase() },
+        ...(clerkId ? [{ clerkId }] : [])
+      ]
+    });
+
+    // If user doesn't exist, create them (OAuth registration)
+    if (!user) {
+      const userName = name || email.split('@')[0];
+      console.log(`📝 Creating new OAuth user: ${email} via ${normalizedProvider}, name: ${userName}`);
+      
+      user = new User({
+        name: userName,
+        email: email.toLowerCase(),
+        clerkId: clerkId || undefined,
+        authProvider: normalizedProvider,
+        isVerified: true, // OAuth users are pre-verified by the provider
+        // No password or phone required for OAuth users
+      });
+      
+      try {
+        await user.save();
+        console.log(`✅ OAuth user created: ${user._id}`);
+      } catch (saveError) {
+        console.error(`❌ Error saving new OAuth user:`, saveError.message);
+        // If it's a duplicate key error, try to find the existing user
+        if (saveError.code === 11000) {
+          user = await User.findOne({ email: email.toLowerCase() });
+          if (!user) {
+            throw new Error('User creation failed due to duplicate key, but user not found');
+          }
+          console.log(`ℹ️ Found existing user after duplicate error: ${user._id}`);
+        } else {
+          throw saveError;
+        }
+      }
+    } else {
+      console.log(`ℹ️ Found existing OAuth user: ${user._id}`);
+      
+      // Build update object - only update what's needed
+      const updateFields = {};
+      
+      // Update clerkId if not set
+      if (clerkId && !user.clerkId) {
+        updateFields.clerkId = clerkId;
+      }
+      
+      // Update auth provider if not set or is 'email' (upgrading from email to OAuth)
+      if (normalizedProvider && (!user.authProvider || user.authProvider === 'email')) {
+        updateFields.authProvider = normalizedProvider;
+      }
+      
+      // Mark as verified if not already
+      if (!user.isVerified) {
+        updateFields.isVerified = true;
+      }
+      
+      // Fix missing name if user has no name
+      const userName = name || email.split('@')[0];
+      if (!user.name) {
+        updateFields.name = userName;
+        console.log(`ℹ️ Setting missing name for user: ${userName}`);
+      }
+      
+      // Only update if there are changes
+      if (Object.keys(updateFields).length > 0) {
+        // Use findByIdAndUpdate to avoid full document validation
+        user = await User.findByIdAndUpdate(
+          user._id,
+          { $set: updateFields },
+          { new: true, runValidators: false } // Skip validators to avoid issues with legacy data
+        );
+        console.log(`✅ Updated OAuth user fields:`, Object.keys(updateFields));
+      }
     }
 
     // Generate JWT token
     const token = generateToken(user._id);
 
-    console.log(`✅ OAuth login successful for ${email} via ${provider}`);
+    console.log(`✅ OAuth login successful for ${email} via ${normalizedProvider}`);
 
     res.status(200).json({
       message: 'OAuth login successful',
       token: token,
       user: {
         id: user._id,
-        name: user.name,
+        name: user.name || name || email.split('@')[0], // Fallback for response
         email: user.email,
         phone: user.phone,
         profileImage: user.profileImage,
