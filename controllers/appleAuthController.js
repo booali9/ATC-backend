@@ -20,7 +20,10 @@ const VALID_AUDIENCES = [
 
 // Generate JWT Token for our app
 const generateToken = (userId) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '30d' });
+  // Ensure userId is a string
+  const userIdString = userId.toString();
+  console.log('🔐 Generating token for userId:', userIdString);
+  return jwt.sign({ userId: userIdString }, process.env.JWT_SECRET, { expiresIn: '30d' });
 };
 
 /**
@@ -162,6 +165,10 @@ const appleSignIn = async (req, res) => {
         user.appleUserId = appleUserIdentifier;
         user.isVerified = true;
         await user.save();
+        
+        // Small delay to ensure user is fully saved to database
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         console.log('🔗 Linked Apple ID to existing user:', userEmail);
       }
     }
@@ -181,6 +188,10 @@ const appleSignIn = async (req, res) => {
       });
 
       await user.save();
+      
+      // Small delay to ensure user is fully saved to database
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       isNewUser = true;
       console.log('✅ New Apple user created:', userEmail);
     }
@@ -190,6 +201,27 @@ const appleSignIn = async (req, res) => {
     
     console.log(`✅ Apple Sign In successful for ${user.email}`);
     console.log(`🔐 Generated token for user ID: ${user._id}`);
+    console.log(`🔐 User ID type: ${typeof user._id}`);
+    console.log(`🔐 User ID string: ${user._id.toString()}`);
+    console.log(`🔐 Generated token length: ${token.length}`);
+    console.log(`🔐 Generated token preview: ${token.substring(0, 50)}...`);
+    console.log(`🔐 JWT_SECRET configured: ${process.env.JWT_SECRET ? 'yes' : 'NO'}`);
+    console.log(`🔐 JWT_SECRET length: ${process.env.JWT_SECRET ? process.env.JWT_SECRET.length : 0}`);
+
+    // Test token verification immediately
+    try {
+      const testDecoded = jwt.verify(token, process.env.JWT_SECRET);
+      console.log(`✅ Token verification test passed:`, testDecoded);
+      
+      // Test user lookup with decoded ID
+      const testUser = await User.findById(testDecoded.userId).select('-password');
+      console.log(`✅ User lookup test:`, testUser ? 'found' : 'NOT FOUND');
+      if (!testUser) {
+        console.log(`❌ User lookup failed for ID: ${testDecoded.userId} (type: ${typeof testDecoded.userId})`);
+      }
+    } catch (testError) {
+      console.log(`❌ Token verification test failed:`, testError.message);
+    }
 
     res.status(200).json({
       message: isNewUser ? 'Account created successfully' : 'Login successful',

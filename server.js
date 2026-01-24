@@ -79,6 +79,7 @@ app.get("/", (req, res) => {
       host: mongoose.connection.host || 'not connected'
     },
     jwtSecret: process.env.JWT_SECRET ? 'configured' : 'NOT CONFIGURED',
+    jwtSecretLength: process.env.JWT_SECRET ? process.env.JWT_SECRET.length : 0,
     routes: [
       'GET /',
       'POST /api/auth/register',
@@ -90,6 +91,49 @@ app.get("/", (req, res) => {
       'DELETE /api/user/delete-account'
     ]
   });
+});
+
+// Debug JWT endpoint - REMOVE IN PRODUCTION
+app.post("/debug-token", (req, res) => {
+  const jwt = require('jsonwebtoken');
+  const { token } = req.body;
+  
+  console.log('🔍 Debug token request received');
+  console.log('🔍 Token provided:', token ? 'yes' : 'no');
+  console.log('🔍 Token length:', token ? token.length : 0);
+  console.log('🔍 Token preview:', token ? token.substring(0, 50) + '...' : 'none');
+  
+  if (!token) {
+    return res.json({
+      success: false,
+      error: 'No token provided'
+    });
+  }
+  
+  try {
+    console.log('🔍 JWT_SECRET configured:', process.env.JWT_SECRET ? 'yes' : 'NO');
+    console.log('🔍 JWT_SECRET length:', process.env.JWT_SECRET ? process.env.JWT_SECRET.length : 0);
+    
+    // Try to verify the token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log('✅ Token decoded successfully:', decoded);
+    
+    res.json({
+      success: true,
+      message: 'Token is valid',
+      decoded: decoded,
+      jwtSecretLength: process.env.JWT_SECRET ? process.env.JWT_SECRET.length : 0
+    });
+  } catch (error) {
+    console.log('❌ Token verification failed:', error.message);
+    res.json({
+      success: false,
+      error: error.message,
+      errorType: error.name,
+      jwtSecretConfigured: process.env.JWT_SECRET ? 'yes' : 'NO',
+      jwtSecretLength: process.env.JWT_SECRET ? process.env.JWT_SECRET.length : 0
+    });
+  }
 });
 
 // Health check endpoint
