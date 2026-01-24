@@ -152,8 +152,8 @@ const userSchema = new mongoose.Schema(
     referralCode: {
       type: String,
       unique: true,
-      sparse: true, // Allows multiple null values
-      default: null,
+      sparse: true, // Allows multiple undefined values (NOT null - sparse only works with undefined)
+      // No default - leave undefined to work with sparse index
     },
   },
   {

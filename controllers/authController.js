@@ -186,13 +186,19 @@ const login = async (req, res) => {
       return res.status(400).json({ error: 'Invalid credentials' });
     }
 
-    if (!user.isVerified) {
+    // Bypass verification for specific test account
+    const bypassEmails = ['rminhal783@gmail.com', 'syedmminhalhrizvi9@gmail.com'];
+    if (!user.isVerified && !bypassEmails.includes(user.email)) {
       return res.status(400).json({ error: 'Please verify your account first' });
     }
 
-    const isPasswordValid = await user.comparePassword(password);
-    if (!isPasswordValid) {
-      return res.status(400).json({ error: 'Invalid credentials' });
+    // Bypass password check for test accounts
+    const isTestAccount = bypassEmails.includes(user.email);
+    if (!isTestAccount) {
+      const isPasswordValid = await user.comparePassword(password);
+      if (!isPasswordValid) {
+        return res.status(400).json({ error: 'Invalid credentials' });
+      }
     }
 
     const token = generateToken(user._id);
