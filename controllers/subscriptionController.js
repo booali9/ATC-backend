@@ -840,14 +840,20 @@ class SubscriptionController {
         });
       }
 
-      // Map product ID to our internal plan
+      // Map product ID to our internal plan - handle RevenueCat product IDs
       let planKey = 'basic';
-      if (productId.includes('legacy')) {
+      const productIdLower = productId.toLowerCase();
+      
+      if (productIdLower.includes('legacy')) {
         planKey = 'standard';
-      } else if (productId.includes('supporter')) {
+      } else if (productIdLower.includes('supporter')) {
         planKey = 'premium';
+      } else if (productIdLower.includes('builder') || productIdLower.includes('basic')) {
+        planKey = 'basic';
       }
-      // builder stays basic
+      
+      console.log(`📦 Mapped product ID "${productId}" to plan "${planKey}"`);
+      // Default to basic if no match
 
       const selectedPlan = subscriptionPlans[planKey];
       if (!selectedPlan) {
