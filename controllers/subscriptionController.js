@@ -875,7 +875,11 @@ class SubscriptionController {
       // Verify the receipt with Apple/Google
       let isValidReceipt = false;
 
-      if (platform === 'ios') {
+      // For demo purchases, skip verification
+      if (transactionId.startsWith('demo_')) {
+        console.log('🎭 Demo purchase detected - skipping receipt verification');
+        isValidReceipt = true;
+      } else if (platform === 'ios') {
         isValidReceipt = await this.verifyAppleReceipt(receipt, productId);
       } else if (platform === 'android') {
         isValidReceipt = await this.verifyGoogleReceipt(receipt, productId);
