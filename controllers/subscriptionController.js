@@ -1,6 +1,7 @@
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const User = require("../models/User");
 const subscriptionPlans = require("../config/subscriptionPlan");
+const { verifyAppleReceipt } = require("../utils/appleReceiptVerification");
 
 class SubscriptionController {
   // Create checkout session
@@ -1118,6 +1119,97 @@ class SubscriptionController {
       console.error('❌ Google Play API verification error:', error);
       // Fallback to basic verification if API fails
       return await this.verifyGoogleReceipt(purchaseToken, productId);
+    }
+  }
+
+  // Verify iOS purchase with Apple receipt validation
+  async verifyIOS(req, res) {
+    try {
+      const { receipt, productId, platform, userId } = req.body;
+
+      console.log('🍎 Verifying iOS purchase:', {
+        productId,
+        platform,
+        userId: userId || req.user?.id
+      });
+
+      // Validate required fields
+      if (!receipt || !productId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Missing required fields: receipt, productId'
+        });
+      }
+
+      const userIdToUse = userId || req.user?.id;
+      if (!userIdToUse) {
+        return res.status(401).json({
+          success: false,
+          message: 'User authentication required'
+        });
+      }
+
+      // Find the user
+      const user = await User.findById(userIdToUse);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      // Verify receipt with Apple
+      const verificationResult = await verifyAppleReceipt(receipt);
+      
+      if (verificationResult.status !== 0) {
+        console.log('❌ Apple receipt verification failed:', verificationResult.status);
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid receipt'
+        });
+      }
+
+      // Map product ID to our internal plan
+      let planKey = 'basic'; // Default to basic plan
+      const selectedPlan = subscriptionPlans[planKey];
+
+      // Add credits immediately
+      const creditsToAdd = selectedPlan.credits;
+      const updatedUser = await User.findByIdAndUpdate(
+        userIdToUse,
+        {
+          $set: {
+            'subscription.plan': planKey,
+            'subscription.status': 'active',
+            'subscription.currentPeriodEnd': new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+            'subscription.platform': 'ios',
+            'subscription.productId': productId
+          },
+          $inc: { credits: creditsToAdd }
+        },
+        { new: true, runValidators: false }
+      );
+
+      console.log(`✅ iOS purchase verified: Added ${creditsToAdd} credits to ${user.email}`);
+      console.log(`📊 New credit balance: ${updatedUser.credits}`);
+
+      res.json({
+        success: true,
+        message: 'Purchase verified successfully',
+        data: {
+          plan: planKey,
+          creditsAdded: creditsToAdd,
+          totalCredits: updatedUser.credits
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ iOS purchase verification error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error verifying purchase',
+        error: error.message
+      });
     }
   }
 
