@@ -59,13 +59,13 @@ class SubscriptionController {
 
       const selectedPlan = subscriptionPlans[plan];
 
-      // Validate Stripe Price ID
-      if (!selectedPlan.stripePriceId) {
-        return res.status(500).json({
-          success: false,
-          message: "Subscription plan not properly configured",
-        });
-      }
+      // Validate Stripe Price ID (not needed for one-time payments)
+      // if (!selectedPlan.stripePriceId) {
+      //   return res.status(500).json({
+      //     success: false,
+      //     message: "Subscription plan not properly configured",
+      //   });
+      // }
 
       // Use backend redirect endpoints that will redirect to app deep links
       // HARDCODED to production backend URL to ensure it always works
@@ -87,28 +87,30 @@ class SubscriptionController {
 
 
 
-      // Create checkout session (LEGACY - STRIPE WEB)
+      // Create checkout session for one-time payment
       const session = await stripe.checkout.sessions.create({
         customer: customerId,
         payment_method_types: ["card"],
         line_items: [
           {
-            price: selectedPlan.stripePriceId,
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: `${selectedPlan.name} Credits`,
+                description: `${selectedPlan.credits} credits for ATC`
+              },
+              unit_amount: selectedPlan.price, // Price in cents
+            },
             quantity: 1,
           },
         ],
-        mode: "subscription",
+        mode: "payment", // Changed from "subscription" to "payment"
         success_url: successUrl,
         cancel_url: cancelUrl,
         metadata: {
           userId: userId.toString(),
           plan: plan,
-        },
-        subscription_data: {
-          metadata: {
-            userId: userId.toString(),
-            plan: plan,
-          },
+          credits: selectedPlan.credits.toString()
         },
       });
 
@@ -358,20 +360,20 @@ class SubscriptionController {
     }
   }
 
-  // Handle checkout.session.completed - IMMEDIATE credit addition for new checkouts
+  // Handle checkout.session.completed - IMMEDIATE credit addition for one-time payments
   async handleCheckoutCompleted(event) {
     try {
       const session = event.data.object;
       const customerId = session.customer;
-      const subscriptionId = session.subscription;
+      const paymentIntentId = session.payment_intent;
 
       console.log(`✅ Processing checkout.session.completed`);
       console.log(`📧 Session ID: ${session.id}`);
       console.log(`👤 Customer ID: ${customerId}`);
-      console.log(`📋 Subscription ID: ${subscriptionId}`);
+      console.log(`💳 Payment Intent ID: ${paymentIntentId}`);
 
-      if (!subscriptionId) {
-        console.log("ℹ️ Checkout not for a subscription, skipping");
+      if (session.mode !== 'payment') {
+        console.log("ℹ️ Checkout not for a one-time payment, skipping");
         return;
       }
 
@@ -399,14 +401,15 @@ class SubscriptionController {
         }
       }
 
-      await this.processCheckoutForUser(user, session, subscriptionId);
+      await this.processOneTimePaymentForUser(user, session);
     } catch (error) {
       console.error("❌ Error handling checkout.session.completed:", error);
     }
   }
 
-  async processCheckoutForUser(user, session, subscriptionId) {
-    const plan = session.metadata?.plan || user.subscription?.plan || "basic";
+  async processOneTimePaymentForUser(user, session) {
+    const plan = session.metadata?.plan || "basic";
+    const creditsFromMetadata = parseInt(session.metadata?.credits) || 0;
     const selectedPlan = subscriptionPlans[plan];
 
     if (!selectedPlan) {
@@ -414,10 +417,7 @@ class SubscriptionController {
       return;
     }
 
-    console.log(`📊 Processing checkout for ${user.email}, Plan: ${plan}`);
-
-    // Get the subscription from Stripe for the latest info
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    console.log(`📊 Processing one-time payment for ${user.email}, Plan: ${plan}`);
 
     // Check if this session has already been processed
     const sessionId = session.id;
@@ -430,8 +430,8 @@ class SubscriptionController {
       return;
     }
 
-    // Use findOneAndUpdate to avoid version conflicts
-    const creditsToAdd = selectedPlan.credits;
+    // Use credits from metadata or plan config
+    const creditsToAdd = creditsFromMetadata || selectedPlan.credits;
 
     const updatedUser = await User.findOneAndUpdate(
       {
@@ -441,13 +441,9 @@ class SubscriptionController {
       {
         $set: {
           "subscription.plan": plan,
-          "subscription.stripeSubscriptionId": subscriptionId,
-          "subscription.status": subscription.status,
-          "subscription.currentPeriodEnd": subscription.current_period_end
-            ? new Date(subscription.current_period_end * 1000)
-            : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-          "subscription.cancelAtPeriodEnd":
-            subscription.cancel_at_period_end || false,
+          "subscription.status": "active",
+          "subscription.lastPurchaseDate": new Date(),
+          "subscription.platform": "stripe"
         },
         $inc: { credits: creditsToAdd },
         $push: {
@@ -462,7 +458,7 @@ class SubscriptionController {
 
     if (updatedUser) {
       console.log(
-        `✅ Checkout completed: Added ${creditsToAdd} credits to ${user.email}`,
+        `✅ One-time payment completed: Added ${creditsToAdd} credits to ${user.email}`,
       );
       console.log(`📊 New credit balance: ${updatedUser.credits}`);
     } else {
@@ -785,9 +781,7 @@ class SubscriptionController {
         name: plan.name,
         price: plan.price / 100, // Convert to dollars
         credits: plan.credits,
-        interval: plan.interval,
         description: plan.description,
-        stripePriceId: plan.stripePriceId,
       }));
 
       res.json({
@@ -798,7 +792,7 @@ class SubscriptionController {
       console.error("❌ Get plans error:", error);
       res.status(500).json({
         success: false,
-        message: "Error fetching subscription plans",
+        message: "Error fetching credit packages",
         error: error.message,
       });
     }

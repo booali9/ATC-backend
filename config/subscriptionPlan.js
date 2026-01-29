@@ -1,24 +1,21 @@
 const subscriptionPlans = {
   basic: {
-    name: 'Basic',
+    name: 'Builder',
     price: 100, // $1.00 in cents
     credits: 100,
-    interval: 'month',
-    stripePriceId: process.env.STRIPE_BASIC_PRICE_ID // You'll set this in Stripe dashboard
+    description: 'One-time purchase of 100 credits'
   },
   standard: {
-    name: 'Standard',
+    name: 'Legacy Member',
     price: 300, // $3.00 in cents
     credits: 350,
-    interval: 'month',
-    stripePriceId: process.env.STRIPE_STANDARD_PRICE_ID
+    description: 'One-time purchase of 350 credits'
   },
   premium: {
-    name: 'Premium',
+    name: 'Supporter',
     price: 500, // $5.00 in cents
     credits: 500,
-    interval: 'month',
-    stripePriceId: process.env.STRIPE_PREMIUM_PRICE_ID
+    description: 'One-time purchase of 500 credits'
   }
 };
 
