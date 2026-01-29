@@ -82,6 +82,12 @@ router.post(
 // Verify purchase from expo-iap (iOS/Android native purchases)
 router.post("/verify-purchase", SubscriptionController.verifyPurchase);
 
+// Verify iOS purchase with Apple receipt validation (NEW CLEAN METHOD)
+router.post("/verify-ios", SubscriptionController.verifyIOS);
+
+// Verify Android purchase with Google Play validation (NEW CLEAN METHOD)
+router.post("/verify-android", SubscriptionController.verifyAndroid);
+
 // Get subscription status
 router.get("/status", SubscriptionController.getSubscriptionStatus);
 
