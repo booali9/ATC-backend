@@ -889,7 +889,7 @@ class SubscriptionController {
       } else if (platform === 'ios') {
         isValidReceipt = await this.verifyAppleReceipt(receipt, productId);
       } else if (platform === 'android') {
-        isValidReceipt = await this.verifyGoogleReceipt(receipt, productId);
+        isValidReceipt = await this.verifyGoogleReceiptWithAPI(receipt, productId, 'com.booali.Atc');
       } else {
         return res.status(400).json({
           success: false,
