@@ -69,7 +69,7 @@ class SubscriptionController {
 
       // Use backend redirect endpoints that will redirect to app deep links
       // HARDCODED to production backend URL to ensure it always works
-      const backendUrl = "https://king-prawn-app-wksnq.ondigitalocean.app";
+      const backendUrl = "https://atc-backend-kappa.vercel.app";
 
       // Include the app's redirect URL as a query parameter so backend can do HTTP 302 redirect
       const encodedSuccessRedirect = successRedirectUrl
@@ -876,10 +876,14 @@ class SubscriptionController {
       // Verify the receipt with Apple/Google
       let isValidReceipt = false;
 
-      if (platform === 'ios') {
+      // For demo purchases, skip verification
+      if (transactionId.startsWith('demo_')) {
+        console.log('🎭 Demo purchase detected - skipping receipt verification');
+        isValidReceipt = true;
+      } else if (platform === 'ios') {
         isValidReceipt = await this.verifyAppleReceipt(receipt, productId);
       } else if (platform === 'android') {
-        isValidReceipt = await this.verifyGoogleReceipt(receipt, productId);
+        isValidReceipt = await this.verifyGoogleReceiptWithAPI(receipt, productId, 'com.booali.Atc');
       } else {
         return res.status(400).json({
           success: false,
