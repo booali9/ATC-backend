@@ -69,7 +69,7 @@ class SubscriptionController {
 
       // Use backend redirect endpoints that will redirect to app deep links
       // HARDCODED to production backend URL to ensure it always works
-      const backendUrl = "https://atc-backend-kappa.vercel.app";
+      const backendUrl = "https://king-prawn-app-wksnq.ondigitalocean.app";
 
       // Include the app's redirect URL as a query parameter so backend can do HTTP 302 redirect
       const encodedSuccessRedirect = successRedirectUrl
