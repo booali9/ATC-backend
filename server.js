@@ -151,6 +151,7 @@ app.use('/api/user', require('./routes/userRoute'));
 app.use('/api/chat', require('./routes/chatRoutes'));
 app.use('/api/barter', require('./routes/barterRoutes'));
 app.use('/api/subscription', require('./routes/subscription'));
+app.use('/api/revenuecat', require('./routes/revenuecat'));
 app.use('/api/cron', require('./routes/cronRoutes'));
 app.use('/api/stream', require('./routes/streamRoutes'));
 app.use('/webhook', require('./routes/webhook'))
