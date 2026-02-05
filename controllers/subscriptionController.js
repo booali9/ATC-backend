@@ -835,27 +835,49 @@ class SubscriptionController {
         });
       }
 
-      // Map product ID to our internal plan - handle RevenueCat product IDs
-      let planKey = 'basic';
+      // Check if this is a credit package or subscription
+      let isCreditPackage = false;
+      let creditsToAdd = 0;
+      let planKey = null;
+      
       const productIdLower = productId.toLowerCase();
       
-      if (productIdLower.includes('legacy')) {
-        planKey = 'standard';
-      } else if (productIdLower.includes('supporter')) {
-        planKey = 'premium';
-      } else if (productIdLower.includes('builder') || productIdLower.includes('basic')) {
+      // Check for credit packages
+      if (productIdLower.includes('atc_credits_100')) {
+        isCreditPackage = true;
+        creditsToAdd = 100;
+      } else if (productIdLower.includes('atc_350_credit')) {
+        isCreditPackage = true;
+        creditsToAdd = 350;
+      } else if (productIdLower.includes('atc_credits_500')) {
+        isCreditPackage = true;
+        creditsToAdd = 500;
+      } else {
+        // This is a subscription
         planKey = 'basic';
+        if (productIdLower.includes('legacy')) {
+          planKey = 'standard';
+        } else if (productIdLower.includes('supporter')) {
+          planKey = 'premium';
+        } else if (productIdLower.includes('builder') || productIdLower.includes('basic')) {
+          planKey = 'basic';
+        }
+        
+        console.log(`📦 Mapped subscription product ID "${productId}" to plan "${planKey}"`);
       }
       
-      console.log(`📦 Mapped product ID "${productId}" to plan "${planKey}"`);
-      // Default to basic if no match
-
-      const selectedPlan = subscriptionPlans[planKey];
-      if (!selectedPlan) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid product ID'
-        });
+      if (isCreditPackage) {
+        console.log(`💰 Credit package detected: ${productId} = ${creditsToAdd} credits`);
+      } else {
+        const selectedPlan = subscriptionPlans[planKey];
+        if (!selectedPlan) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid product ID'
+          });
+        }
+        creditsToAdd = selectedPlan.credits;
+        console.log(`📦 Mapped subscription product ID "${productId}" to plan "${planKey}" (${creditsToAdd} credits)`);
       }
 
       // Check if this transaction has already been processed
@@ -899,21 +921,26 @@ class SubscriptionController {
         });
       }
 
-      // Add credits and update subscription
-      const creditsToAdd = selectedPlan.credits;
+      // Add credits and update subscription (if applicable)
+      let updateData = {
+        $inc: { credits: creditsToAdd },
+        $addToSet: { processedTransactions: transactionId }
+      };
+      
+      if (!isCreditPackage && planKey) {
+        // For subscriptions, also update subscription data
+        updateData.$set = {
+          'subscription.plan': planKey,
+          'subscription.status': 'active',
+          'subscription.currentPeriodEnd': new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+          'subscription.platform': platform,
+          'subscription.productId': productId
+        };
+      }
+      
       const updatedUser = await User.findByIdAndUpdate(
         userIdToUse,
-        {
-          $set: {
-            'subscription.plan': planKey,
-            'subscription.status': 'active',
-            'subscription.currentPeriodEnd': new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
-            'subscription.platform': platform,
-            'subscription.productId': productId
-          },
-          $inc: { credits: creditsToAdd },
-          $addToSet: { processedTransactions: transactionId }
-        },
+        updateData,
         { new: true, runValidators: false }
       );
 
@@ -924,10 +951,11 @@ class SubscriptionController {
         success: true,
         message: 'Purchase verified successfully',
         data: {
+          type: isCreditPackage ? 'credits' : 'subscription',
           plan: planKey,
           creditsAdded: creditsToAdd,
           totalCredits: updatedUser.credits,
-          subscription: updatedUser.subscription
+          subscription: isCreditPackage ? null : updatedUser.subscription
         }
       });
 
