@@ -26,10 +26,10 @@ const register = async (req, res) => {
       $or: [{ email }, { phone }]
     });
     console.log(existingUser)
-    
+
     if (existingUser) {
-      return res.status(400).json({ 
-        error: 'User with this email or phone already exists' 
+      return res.status(400).json({
+        error: 'User with this email or phone already exists'
       });
     }
 
@@ -56,8 +56,8 @@ const register = async (req, res) => {
     if (!emailSent) {
       // If email fails, delete the user and return error
       await User.findByIdAndDelete(user._id);
-      return res.status(500).json({ 
-        error: 'Failed to send OTP email. Please try again.' 
+      return res.status(500).json({
+        error: 'Failed to send OTP email. Please try again.'
       });
     }
 
@@ -118,19 +118,19 @@ const verifyOtp = async (req, res) => {
 // Complete Profile - UPDATED: Uses token from middleware
 const completeProfile = async (req, res) => {
   try {
-    const { skills, serviceSeeking } = req.body;
+    const { skills, serviceSeeking, name } = req.body;
     const userId = req.user.id; // From auth middleware
     console.log(userId)
 
     const user = await User.findById(userId);
     console.log(user)
-    
+
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     let profileImage = {};
-    
+
     if (req.file) {
       const result = await cloudinary.uploader.upload(req.file.path, {
         folder: 'user-profiles'
@@ -142,7 +142,12 @@ const completeProfile = async (req, res) => {
       };
     }
 
-    user.profileImage = profileImage;
+    if (profileImage && profileImage.url) {
+      user.profileImage = profileImage;
+    }
+    if (name && name.trim()) {
+      user.name = name.trim();
+    }
     user.skills_offered = typeof skills === 'string' ? skills.split(',') : skills;
     user.skills_wanted = serviceSeeking;
 
@@ -232,8 +237,8 @@ const forgotPassword = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) {
       // Don't reveal if user exists or not for security
-      return res.status(200).json({ 
-        message: 'If the email exists, a reset OTP has been sent' 
+      return res.status(200).json({
+        message: 'If the email exists, a reset OTP has been sent'
       });
     }
 
@@ -253,8 +258,8 @@ const forgotPassword = async (req, res) => {
     if (!emailSent) {
       user.resetOtp = undefined;
       await user.save();
-      return res.status(500).json({ 
-        error: 'Failed to send reset OTP email. Please try again.' 
+      return res.status(500).json({
+        error: 'Failed to send reset OTP email. Please try again.'
       });
     }
 
@@ -329,7 +334,7 @@ const oauthLogin = async (req, res) => {
     }
 
     // Try to find user by email or clerkId
-    let user = await User.findOne({ 
+    let user = await User.findOne({
       $or: [
         { email: email.toLowerCase() },
         ...(clerkId ? [{ clerkId }] : [])
@@ -340,7 +345,7 @@ const oauthLogin = async (req, res) => {
     if (!user) {
       const userName = name || email.split('@')[0];
       console.log(`📝 Creating new OAuth user: ${email} via ${normalizedProvider}, name: ${userName}`);
-      
+
       user = new User({
         name: userName,
         email: email.toLowerCase(),
@@ -349,7 +354,7 @@ const oauthLogin = async (req, res) => {
         isVerified: true, // OAuth users are pre-verified by the provider
         // No password or phone required for OAuth users
       });
-      
+
       try {
         await user.save();
         console.log(`✅ OAuth user created: ${user._id}`);
@@ -368,32 +373,32 @@ const oauthLogin = async (req, res) => {
       }
     } else {
       console.log(`ℹ️ Found existing OAuth user: ${user._id}`);
-      
+
       // Build update object - only update what's needed
       const updateFields = {};
-      
+
       // Update clerkId if not set
       if (clerkId && !user.clerkId) {
         updateFields.clerkId = clerkId;
       }
-      
+
       // Update auth provider if not set or is 'email' (upgrading from email to OAuth)
       if (normalizedProvider && (!user.authProvider || user.authProvider === 'email')) {
         updateFields.authProvider = normalizedProvider;
       }
-      
+
       // Mark as verified if not already
       if (!user.isVerified) {
         updateFields.isVerified = true;
       }
-      
+
       // Fix missing name if user has no name
       const userName = name || email.split('@')[0];
       if (!user.name) {
         updateFields.name = userName;
         console.log(`ℹ️ Setting missing name for user: ${userName}`);
       }
-      
+
       // Only update if there are changes
       if (Object.keys(updateFields).length > 0) {
         // Use findByIdAndUpdate to avoid full document validation

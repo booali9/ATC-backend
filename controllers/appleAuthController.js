@@ -32,7 +32,7 @@ const generateToken = (userId) => {
  */
 const generateAppleClientSecret = () => {
   const privateKey = APPLE_CONFIG.privateKey;
-  
+
   if (!privateKey) {
     throw new Error('Apple private key not configured');
   }
@@ -70,8 +70,8 @@ const appleSignIn = async (req, res) => {
     });
 
     if (!identityToken || !appleUserId) {
-      return res.status(400).json({ 
-        error: 'Identity token and Apple user ID are required' 
+      return res.status(400).json({
+        error: 'Identity token and Apple user ID are required'
       });
     }
 
@@ -79,7 +79,7 @@ const appleSignIn = async (req, res) => {
     let verifiedToken;
     try {
       console.log('🔐 Nonce received:', nonce ? 'yes' : 'no');
-      
+
       // Decode token WITHOUT verification first to see the actual audience
       const tokenParts = identityToken.split('.');
       let tokenAudience = null;
@@ -92,12 +92,12 @@ const appleSignIn = async (req, res) => {
         console.log('🔍 Valid audiences:', VALID_AUDIENCES);
         console.log('🔍 Audience is valid:', VALID_AUDIENCES.includes(payload.aud));
       }
-      
+
       // Check if audience is in our allowed list
       if (!tokenAudience || !VALID_AUDIENCES.includes(tokenAudience)) {
         throw new Error(`Invalid audience: ${tokenAudience}. Expected one of: ${VALID_AUDIENCES.join(', ')}`);
       }
-      
+
       // Verify with the actual audience from the token
       verifiedToken = await appleSignin.verifyIdToken(identityToken, {
         audience: tokenAudience, // Use the actual audience from token
@@ -113,18 +113,18 @@ const appleSignIn = async (req, res) => {
     } catch (verifyError) {
       console.error('❌ Apple token verification failed:', verifyError.message);
       console.error('❌ Full error:', verifyError);
-      return res.status(401).json({ 
+      return res.status(401).json({
         error: 'Invalid Apple identity token',
-        details: verifyError.message 
+        details: verifyError.message
       });
     }
 
     // The 'sub' claim is Apple's unique identifier for the user
     const appleUserIdentifier = verifiedToken.sub;
-    
+
     // Email from token (most reliable) or from request
     const userEmail = verifiedToken.email || email;
-    
+
     // Handle fullName properly - it can be an object or null
     let userName = 'Apple User'; // Default name
     if (fullName && typeof fullName === 'object') {
@@ -137,17 +137,17 @@ const appleSignIn = async (req, res) => {
     } else if (typeof fullName === 'string' && fullName) {
       userName = fullName;
     }
-    
+
     console.log('🍎 Processed user name:', userName);
 
     if (!userEmail) {
       // This can happen if user has hidden their email and this isn't the first sign-in
       // Try to find user by Apple ID
       const existingUserByAppleId = await User.findOne({ appleUserId: appleUserIdentifier });
-      
+
       if (!existingUserByAppleId) {
-        return res.status(400).json({ 
-          error: 'Email is required for first-time Apple Sign In. Please try again or use a different sign-in method.' 
+        return res.status(400).json({
+          error: 'Email is required for first-time Apple Sign In. Please try again or use a different sign-in method.'
         });
       }
     }
@@ -159,16 +159,16 @@ const appleSignIn = async (req, res) => {
     if (!user && userEmail) {
       // Check if user exists by email
       user = await User.findOne({ email: userEmail });
-      
+
       if (user) {
         // Link Apple ID to existing user
         user.appleUserId = appleUserIdentifier;
         user.isVerified = true;
         await user.save();
-        
+
         // Small delay to ensure user is fully saved to database
         await new Promise(resolve => setTimeout(resolve, 100));
-        
+
         console.log('🔗 Linked Apple ID to existing user:', userEmail);
       }
     }
@@ -176,7 +176,7 @@ const appleSignIn = async (req, res) => {
     if (!user) {
       // Create new user
       const uniquePhone = `apple_${appleUserIdentifier.slice(-10)}`;
-      
+
       user = new User({
         name: userName,
         email: userEmail,
@@ -188,17 +188,22 @@ const appleSignIn = async (req, res) => {
       });
 
       await user.save();
-      
+
       // Small delay to ensure user is fully saved to database
       await new Promise(resolve => setTimeout(resolve, 100));
-      
+
       isNewUser = true;
       console.log('✅ New Apple user created:', userEmail);
+    } else if (user.name === 'Apple User' && userName !== 'Apple User') {
+      // Update name if the stored name is still the default and we now have a real name
+      user.name = userName;
+      await user.save();
+      console.log('✅ Updated Apple user name to:', userName);
     }
 
     // Generate JWT token
     const token = generateToken(user._id);
-    
+
     console.log(`✅ Apple Sign In successful for ${user.email}`);
     console.log(`🔐 Generated token for user ID: ${user._id}`);
     console.log(`🔐 User ID type: ${typeof user._id}`);
@@ -212,7 +217,7 @@ const appleSignIn = async (req, res) => {
     try {
       const testDecoded = jwt.verify(token, process.env.JWT_SECRET);
       console.log(`✅ Token verification test passed:`, testDecoded);
-      
+
       // Test user lookup with decoded ID
       const testUser = await User.findById(testDecoded.userId).select('-password');
       console.log(`✅ User lookup test:`, testUser ? 'found' : 'NOT FOUND');
@@ -223,10 +228,13 @@ const appleSignIn = async (req, res) => {
       console.log(`❌ Token verification test failed:`, testError.message);
     }
 
+    const needsNameUpdate = user.name === 'Apple User';
+
     res.status(200).json({
       message: isNewUser ? 'Account created successfully' : 'Login successful',
       token: token,
       isNewUser,
+      needsNameUpdate,
       user: {
         id: user._id,
         name: user.name,
@@ -242,9 +250,9 @@ const appleSignIn = async (req, res) => {
 
   } catch (error) {
     console.error('🍎 Apple Sign In error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Apple Sign In failed',
-      details: error.message 
+      details: error.message
     });
   }
 };
