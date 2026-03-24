@@ -13,19 +13,11 @@ exports.sendFriendRequest = async (req, res) => {
     const { toUserId } = req.body;
     const fromUserId = req.user._id;
 
-    // Check if user has subscription or is not on free trial
-    if (!req.user.subscription.plan) {
-      return res.status(403).json({
-        success: false,
-        message: "Free trial users cannot send friend requests",
-      });
-    }
-
-    // Check if user has enough credits
+    // Check if user has enough credits (middleware already checks, but double-check here)
     if (req.user.credits < 10) {
       return res.status(400).json({
         success: false,
-        message: "Insufficient credits. Need 10 credits to send friend request",
+        message: `Insufficient credits. You need 10 credits to send a friend request. You currently have ${req.user.credits || 0} credits.`,
       });
     }
 
