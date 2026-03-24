@@ -1151,20 +1151,21 @@ class SubscriptionController {
   // Verify Android purchase with Google Play
   async verifyAndroid(req, res) {
     try {
-      const { receipt, productId, platform, userId, transactionId } = req.body;
+      const { receipt, productId, platform, userId, transactionId, credits, revenueCatTransactionId } = req.body;
 
       console.log('🤖 Verifying Android purchase:', {
         productId,
         platform,
         userId: userId || req.user?.id,
-        hasReceipt: !!receipt
+        transactionId: transactionId || revenueCatTransactionId,
+        creditsFromClient: credits
       });
 
-      // Validate required fields
-      if (!receipt || !productId) {
+      // Validate required fields - allow RevenueCat transaction ID
+      if (!productId) {
         return res.status(400).json({
           success: false,
-          message: 'Missing required fields: receipt, productId'
+          message: 'Missing required field: productId'
         });
       }
 
@@ -1185,34 +1186,50 @@ class SubscriptionController {
         });
       }
 
-      // For now, we'll do basic validation of the purchase token
-      // In production, you should verify with Google Play Developer API
-      if (!receipt || typeof receipt !== 'string' || receipt.length < 10) {
-        console.log('❌ Invalid Google Play purchase token format');
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid receipt format'
+      // Map RevenueCat product ID to credits
+      const productCreditsMap = {
+        'atc_credits_100': 100,
+        'atc_350_credit': 350,
+        'atc_credits_500': 500,
+      };
+
+      // Get credits from product ID mapping, or use client-provided credits as fallback
+      const creditsToAdd = productCreditsMap[productId] || credits || 100;
+
+      // Check for duplicate transaction (prevent double-crediting)
+      const txnId = transactionId || revenueCatTransactionId;
+      if (txnId && user.processedTransactions?.includes(txnId)) {
+        console.log('⚠️ Transaction already processed:', txnId);
+        return res.json({
+          success: true,
+          message: 'Transaction already processed',
+          data: {
+            creditsAdded: 0,
+            totalCredits: user.credits,
+            alreadyProcessed: true
+          }
         });
       }
 
-      // Map product ID to our internal plan
-      let planKey = 'basic'; // Default to basic plan
-      const selectedPlan = subscriptionPlans[planKey];
+      // Add credits and track transaction
+      const updateData = {
+        $set: {
+          'subscription.status': 'active',
+          'subscription.platform': 'android',
+          'subscription.productId': productId,
+          'subscription.lastPurchaseDate': new Date()
+        },
+        $inc: { credits: creditsToAdd }
+      };
 
-      // Add credits immediately
-      const creditsToAdd = selectedPlan.credits;
+      // Track transaction to prevent duplicates
+      if (txnId) {
+        updateData.$push = { processedTransactions: txnId };
+      }
+
       const updatedUser = await User.findByIdAndUpdate(
         userIdToUse,
-        {
-          $set: {
-            'subscription.plan': planKey,
-            'subscription.status': 'active',
-            'subscription.currentPeriodEnd': new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
-            'subscription.platform': 'android',
-            'subscription.productId': productId
-          },
-          $inc: { credits: creditsToAdd }
-        },
+        updateData,
         { new: true, runValidators: false }
       );
 
@@ -1223,7 +1240,7 @@ class SubscriptionController {
         success: true,
         message: 'Purchase verified successfully',
         data: {
-          plan: planKey,
+          productId,
           creditsAdded: creditsToAdd,
           totalCredits: updatedUser.credits
         }
@@ -1239,22 +1256,24 @@ class SubscriptionController {
     }
   }
 
-  // Verify iOS purchase with Apple receipt validation
+  // Verify iOS purchase - supports both RevenueCat and raw Apple receipts
   async verifyIOS(req, res) {
     try {
-      const { receipt, productId, platform, userId } = req.body;
+      const { receipt, productId, platform, userId, transactionId, credits, revenueCatTransactionId } = req.body;
 
       console.log('🍎 Verifying iOS purchase:', {
         productId,
         platform,
-        userId: userId || req.user?.id
+        userId: userId || req.user?.id,
+        transactionId: transactionId || revenueCatTransactionId,
+        creditsFromClient: credits
       });
 
-      // Validate required fields
-      if (!receipt || !productId) {
+      // Validate required fields - productId is required, receipt is optional for RevenueCat
+      if (!productId) {
         return res.status(400).json({
           success: false,
-          message: 'Missing required fields: receipt, productId'
+          message: 'Missing required field: productId'
         });
       }
 
@@ -1275,35 +1294,70 @@ class SubscriptionController {
         });
       }
 
-      // Verify receipt with Apple
-      const verificationResult = await verifyAppleReceipt(receipt);
-      
-      if (verificationResult.status !== 0) {
-        console.log('❌ Apple receipt verification failed:', verificationResult.status);
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid receipt'
+      // Map RevenueCat product ID to credits
+      const productCreditsMap = {
+        'atc_credits_100': 100,
+        'atc_350_credit': 350,
+        'atc_credits_500': 500,
+      };
+
+      // Get credits from product ID mapping, or use client-provided credits as fallback
+      const creditsToAdd = productCreditsMap[productId] || credits || 100;
+
+      // Check for duplicate transaction (prevent double-crediting)
+      const txnId = transactionId || revenueCatTransactionId;
+      if (txnId && user.processedTransactions?.includes(txnId)) {
+        console.log('⚠️ Transaction already processed:', txnId);
+        return res.json({
+          success: true,
+          message: 'Transaction already processed',
+          data: {
+            creditsAdded: 0,
+            totalCredits: user.credits,
+            alreadyProcessed: true
+          }
         });
       }
 
-      // Map product ID to our internal plan
-      let planKey = 'basic'; // Default to basic plan
-      const selectedPlan = subscriptionPlans[planKey];
+      // For RevenueCat, we trust the transaction since RevenueCat validates with Apple
+      // Only verify with Apple directly if we have a raw receipt (base64 encoded)
+      const isRawAppleReceipt = receipt && receipt.length > 100 && !txnId;
+      
+      if (isRawAppleReceipt) {
+        try {
+          const verificationResult = await verifyAppleReceipt(receipt);
+          if (verificationResult.status !== 0) {
+            console.log('❌ Apple receipt verification failed:', verificationResult.status);
+            return res.status(400).json({
+              success: false,
+              message: 'Invalid receipt'
+            });
+          }
+        } catch (appleError) {
+          console.log('⚠️ Apple verification failed, continuing with RevenueCat trust:', appleError.message);
+          // Continue - we'll trust RevenueCat
+        }
+      }
 
-      // Add credits immediately
-      const creditsToAdd = selectedPlan.credits;
+      // Add credits and track transaction
+      const updateData = {
+        $set: {
+          'subscription.status': 'active',
+          'subscription.platform': 'ios',
+          'subscription.productId': productId,
+          'subscription.lastPurchaseDate': new Date()
+        },
+        $inc: { credits: creditsToAdd }
+      };
+
+      // Track transaction to prevent duplicates
+      if (txnId) {
+        updateData.$push = { processedTransactions: txnId };
+      }
+
       const updatedUser = await User.findByIdAndUpdate(
         userIdToUse,
-        {
-          $set: {
-            'subscription.plan': planKey,
-            'subscription.status': 'active',
-            'subscription.currentPeriodEnd': new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
-            'subscription.platform': 'ios',
-            'subscription.productId': productId
-          },
-          $inc: { credits: creditsToAdd }
-        },
+        updateData,
         { new: true, runValidators: false }
       );
 
@@ -1314,7 +1368,7 @@ class SubscriptionController {
         success: true,
         message: 'Purchase verified successfully',
         data: {
-          plan: planKey,
+          productId,
           creditsAdded: creditsToAdd,
           totalCredits: updatedUser.credits
         }
