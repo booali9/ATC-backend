@@ -156,6 +156,8 @@ app.use('/api/cron', require('./routes/cronRoutes'));
 app.use('/api/stream', require('./routes/streamRoutes'));
 app.use('/webhook', require('./routes/webhook'))
 app.use('/api/config', require('./routes/configRoutes'));
+app.use('/api/safe-trade-spot', require('./routes/safeTradeSpotRoutes'));
+app.use('/api/geo', require('./routes/geoRoutes'));
 
 // Socket.IO
 io.on("connection", (socket) => {

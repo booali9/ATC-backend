@@ -128,8 +128,60 @@ const sendResetPasswordOTP = async (email, name, otp) => {
   }
 };
 
+const { escapeHtml } = require('./safeTradeSpotValidation');
+
+// Trusted-contact share (PII) — values must be escaped; never put user input in headers
+const sendTrustedContactShareEmail = async ({
+  to,
+  sharedByName,
+  relationship,
+  snapshotDate,
+  snapshotDay,
+  snapshotTime,
+  locationName,
+  locationAddress,
+}) => {
+  const safeTo = String(to).trim();
+  if (/[\r\n]/.test(safeTo)) {
+    throw new Error('Invalid recipient');
+  }
+
+  const mailOptions = {
+    from: `"ATC Safety" <${process.env.SMTP_USER}>`,
+    to: safeTo,
+    subject: 'ATC Safe Trade Spot — Meetup details shared with you',
+    text: [
+      `${sharedByName} shared Safe Trade Spot details with you (${relationship}).`,
+      `Date: ${snapshotDate} (${snapshotDay})`,
+      `Time: ${snapshotTime}`,
+      `Location: ${locationName}`,
+      `Address: ${locationAddress}`,
+      '',
+      'If you do not know this person, ignore this email.',
+    ].join('\n'),
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:20px;">
+        <h2>Safe Trade Spot details</h2>
+        <p><strong>${escapeHtml(sharedByName)}</strong> shared a meetup with you
+          (relationship: <strong>${escapeHtml(relationship)}</strong>).</p>
+        <ul>
+          <li><strong>Date:</strong> ${escapeHtml(snapshotDate)} (${escapeHtml(snapshotDay)})</li>
+          <li><strong>Time:</strong> ${escapeHtml(snapshotTime)}</li>
+          <li><strong>Location:</strong> ${escapeHtml(locationName)}</li>
+          <li><strong>Address:</strong> ${escapeHtml(locationAddress)}</li>
+        </ul>
+        <p style="color:#666;font-size:13px;">If you do not know this person, ignore this email.</p>
+      </div>
+    `,
+  };
+
+  const info = await transporter.sendMail(mailOptions);
+  return info;
+};
+
 module.exports = {
   sendRegistrationOTP,
   sendResetPasswordOTP,
+  sendTrustedContactShareEmail,
   transporter
 };

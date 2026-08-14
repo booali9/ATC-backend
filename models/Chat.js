@@ -2,10 +2,16 @@ const mongoose = require('mongoose');
 
 const messageSchema = new mongoose.Schema({
   sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  type: { type: String, enum: ['text', 'image', 'voice'], default: 'text' },
-  content: { type: String }, // Text or Cloudinary URL
-  seenBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // Users who have seen this message
-  createdAt: { type: Date, default: Date.now }
+  type: {
+    type: String,
+    enum: ['text', 'image', 'voice', 'safe_trade_spot_invite', 'safe_trade_spot_update'],
+    default: 'text',
+  },
+  content: { type: String }, // Text, Cloudinary URL, or short card summary
+  safeTradeSpotId: { type: mongoose.Schema.Types.ObjectId, ref: 'SafeTradeSpot' },
+  payload: { type: mongoose.Schema.Types.Mixed }, // invite/locked card snapshot for inline render
+  seenBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  createdAt: { type: Date, default: Date.now },
 });
 
 const chatSchema = new mongoose.Schema({
