@@ -4,11 +4,11 @@
   "description": "Backend API for ATC Trading App",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
+    "start": "node init && node server.js",
+    "dev": "node init && nodemon server.js",
     "worker": "node jobs/worker.js",
     "test:sts": "node --test scripts/test-safe-trade-spot.js",
-    "build": "echo 'No build step required'",
+    "build": "node init && echo 'No build step required'",
     "vercel-build": "echo 'Build complete'"
   },
   "engines": {
